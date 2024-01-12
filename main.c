@@ -27,7 +27,7 @@ mkdir build && cd build && cmake .. && cmake --build . --target wasmtime-wasi
 #include <wasi.h>
 #include <wasm.h>
 #include <wasmtime.h>
-
+#include <CL/cl.h>
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
 #define own
 static void exit_with_error(const char *message, wasmtime_error_t *error,
@@ -38,12 +38,14 @@ own wasm_trap_t *clGetPlatformIDs_callback(
     void *env, wasmtime_caller_t *caller, const wasmtime_val_t *args,
     size_t nargs, wasmtime_val_t *results, size_t nresults)
 {
+
     printf("calling clGetPlatformIDs...\n");
     return NULL;
 }
 
-int main()
+int main(int argc, char *argv[])
 {
+
     // Set up our context
     wasm_engine_t *engine = wasm_engine_new();
     assert(engine != NULL);
@@ -59,7 +61,16 @@ int main()
 
     wasm_byte_vec_t wasm;
     // Load our input file to parse it next
-    FILE *file = fopen("build/hellocl.wasm", "rb");
+
+    if (argc != 2)
+    {
+        printf("Usage: %s <file_path>\n", argv[0]);
+        return 1;
+    }
+
+    const char *file_path = argv[1];
+    FILE *file = fopen(file_path, "rb");
+
     if (!file)
     {
         printf("> Error loading file!\n");
