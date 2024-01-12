@@ -1,26 +1,3 @@
-/*
-Example of instantiating a WebAssembly which uses WASI imports.
-
-You can compile and run this example on Linux with:
-
-   cmake examples/
-   cargo build --release -p wasmtime-c-api
-   cc examples/wasi/main.c \
-       -I crates/c-api/include \
-       -I crates/c-api/wasm-c-api/include \
-       target/release/libwasmtime.a \
-       -lpthread -ldl -lm \
-       -o wasi
-   ./wasi
-
-Note that on Windows and macOS the command will be similar, but you'll need
-to tweak the `-lpthread` and such annotations.
-
-You can also build using cmake:
-
-mkdir build && cd build && cmake .. && cmake --build . --target wasmtime-wasi
-*/
-
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -38,8 +15,39 @@ own wasm_trap_t *clGetPlatformIDs_callback(
     void *env, wasmtime_caller_t *caller, const wasmtime_val_t *args,
     size_t nargs, wasmtime_val_t *results, size_t nresults)
 {
+    cl_int CL_err = CL_SUCCESS;
+    cl_uint numPlatforms = 0;
 
-    printf("calling clGetPlatformIDs...\n");
+    CL_err = clGetPlatformIDs(0, NULL, &numPlatforms);
+
+    printf("arg[0] = %u , arg[1] = %p, arg[2] = %p\n", args[0].of.i32, args[1].of.i32, args[2].of.i32);
+
+    wasmtime_extern_t item;
+    bool GE_suc = wasmtime_caller_export_get(caller, "memory", strlen("memory"), &item);
+    if (GE_suc)
+    {
+        printf("Got export!\n");
+    }
+    else
+    {
+        printf("Failed to get export.\n");
+    }
+
+    wasmtime_memory_t memory = item.of.memory;
+    printf("gt memory item! item.kind = %d\n", item.kind);
+    wasmtime_context_t *context = wasmtime_caller_context(caller);
+    printf("wasm memory size = %I64u\n ", wasmtime_memory_size(context, &memory));
+    printf("wasm memory data size = %zd\n ", wasmtime_memory_data_size(context, &memory));
+    printf("get memory of numPlatforms = %u\n", (unsigned int)(wasmtime_memory_data(context, &memory)[args[2].of.i32]));
+
+    wasmtime_memory_data(context, &memory)[args[2].of.i32] = 2;
+
+    if (CL_err == CL_SUCCESS)
+        printf("%u platform(s) found\n", numPlatforms);
+    else
+        printf("clGetPlatformIDs(%i)\n", CL_err);
+
+    results[0].of.i32 = CL_err; // clGetPlatformIDs(args[0].of.i32, args[1].of.i32, args[1].of.i32);
     return NULL;
 }
 
