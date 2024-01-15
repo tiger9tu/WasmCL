@@ -5,13 +5,46 @@
 #include <wasm.h>
 #include <wasmtime.h>
 #include <CL/cl.h>
-#define MIN(a, b) ((a) < (b) ? (a) : (b))
-#define own
+
 static void exit_with_error(const char *message, wasmtime_error_t *error,
                             wasm_trap_t *trap);
 
-// my fake function
-own wasm_trap_t *clGetPlatformIDs_callback(
+// // my fake function
+// //  (import "env" "clGetDeviceIDs" (func $clGetDeviceIDs (type 3)))
+// //   (import "env" "clCreateProgramWithSource" (func $clCreateProgramWithSource (type 4)))
+// //   (import "env" "clBuildProgram" (func $clBuildProgram (type 5)))
+// //   (import "env" "clGetProgramBuildInfo" (func $clGetProgramBuildInfo (type 5)))
+// //   (import "env" "clCreateContext" (func $clCreateContext (type 5)))
+// //   (import "env" "clCreateBuffer" (func $clCreateBuffer (type 3)))
+// //   (import "env" "clCreateCommandQueue" (func $clCreateCommandQueue (type 6)))
+// //   (import "env" "clCreateKernel" (func $clCreateKernel (type 1)))
+// //   (import "env" "clSetKernelArg" (func $clSetKernelArg (type 7)))
+// //   (import "env" "clEnqueueNDRangeKernel" (func $clEnqueueNDRangeKernel (type 8)))
+// //   (import "env" "clEnqueueReadBuffer" (func $clEnqueueReadBuffer (type 8)))
+// //   (import "env" "clReleaseKernel" (func $clReleaseKernel (type 0)))
+// //   (import "env" "clReleaseMemObject" (func $clReleaseMemObject (type 0)))
+// //   (import "env" "clReleaseCommandQueue" (func $clReleaseCommandQueue (type 0)))
+// //   (import "env" "clReleaseProgram" (func $clReleaseProgram (type 0)))
+// //   (import "env" "clReleaseContext" (func $clReleaseContext (type 0)))
+
+// WASM_API_EXTERN wasmtime_error_t *wasmtime_linker_define_func(
+//     wasmtime_linker_t *linker, const char *module, size_t module_len,
+//     const char *name, size_t name_len, const wasm_functype_t *ty,
+//     wasmtime_func_callback_t cb, void *data, void (*finalizer)(void *));
+
+// static inline wasm_functype_t *wasm_functype_new_3_1(
+//     wasm_valtype_t *p1, wasm_valtype_t *p2, wasm_valtype_t *p3,
+//     wasm_valtype_t *r)
+// {
+//     wasm_valtype_t *ps[3] = {p1, p2, p3};
+//     wasm_valtype_t *rs[1] = {r};
+//     wasm_valtype_vec_t params, results;
+//     wasm_valtype_vec_new(&params, 3, ps);
+//     wasm_valtype_vec_new(&results, 1, rs);
+//     return wasm_functype_new(&params, &results);
+// }
+
+wasm_trap_t *clGetPlatformIDs_callback(
     void *env, wasmtime_caller_t *caller, const wasmtime_val_t *args,
     size_t nargs, wasmtime_val_t *results, size_t nresults)
 {
@@ -28,6 +61,68 @@ own wasm_trap_t *clGetPlatformIDs_callback(
     wasmtime_memory_data(context, &memory)[args[2].of.i32] = numPlatforms;
 
     return NULL;
+}
+
+#define MAX_CL_NAME 30
+#define MAX_CL_PARAM 8
+
+typedef struct
+{
+    char name[MAX_CL_NAME];
+    size_t name_len;
+
+    wasm_valkind_t param_types[MAX_CL_PARAM];
+    size_t param_len;
+
+    wasm_valkind_t result_type;
+    wasmtime_func_async_callback_t cb;
+
+} define_func;
+
+define_func func_array[1] = {
+    {.name = "clGetPlatformIDs",
+     .name_len = 16, // this is a problem
+     .param_types = {
+         WASM_I32, WASM_I32, WASM_I32},
+     .param_len = 3,
+     .result_type = WASM_I32,
+     .cb = clGetPlatformIDs_callback}};
+
+int register_func_to_linker(define_func funcs[], int count, wasmtime_linker_t *linker, const char *module, size_t module_len)
+{
+    for (size_t i = 0; i < count; i++)
+    {
+        define_func tmp = funcs[i];
+
+        wasm_valtype_t *params[MAX_CL_PARAM];
+        for (size_t j = 0; j < tmp.param_len; j++)
+        {
+            params[j] = wasm_valtype_new(tmp.param_types[j]);
+        }
+
+        wasm_valtype_t *result[1] = {wasm_valtype_new(tmp.result_type)};
+
+        wasm_valtype_vec_t params_vec, result_vec;
+        wasm_valtype_vec_new(&params_vec, tmp.param_len, params);
+        wasm_valtype_vec_new(&result_vec, 1 /*in c there is only 1 result*/, result);
+
+        wasm_functype_t *tmp_func_type = wasm_functype_new(&params_vec, &result_vec);
+
+        int i = 42;
+
+        wasmtime_error_t *error = wasmtime_linker_define_func(
+            linker,
+            "env",
+            3,
+            tmp.name,
+            tmp.name_len,
+            tmp_func_type,
+            tmp.cb,
+            &i,
+            NULL);
+
+        wasm_functype_delete(tmp_func_type);
+    }
 }
 
 int main(int argc, char *argv[])
@@ -96,27 +191,8 @@ int main(int argc, char *argv[])
 
     // Create external functions
     printf("Creating callback...\n");
+    register_func_to_linker(func_array, 1, linker, "env", 3);
 
-    own wasm_functype_t *clGetPlatformIDs_type = wasm_functype_new_3_1(
-        wasm_valtype_new_i32(),
-        wasm_valtype_new_i32(),
-        wasm_valtype_new_i32(),
-        wasm_valtype_new_i32());
-
-    int i = 42;
-
-    error = wasmtime_linker_define_func(
-        linker,
-        "env",
-        3,
-        "clGetPlatformIDs",
-        strlen("clGetPlatformIDs"),
-        clGetPlatformIDs_type,
-        clGetPlatformIDs_callback,
-        &i,
-        NULL);
-
-    wasm_functype_delete(clGetPlatformIDs_type);
     // Instantiate the module
     error = wasmtime_linker_module(linker, context, "", 0, module);
     if (error != NULL)
