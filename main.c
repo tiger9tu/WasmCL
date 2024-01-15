@@ -17,37 +17,16 @@ own wasm_trap_t *clGetPlatformIDs_callback(
 {
     cl_int CL_err = CL_SUCCESS;
     cl_uint numPlatforms = 0;
-
-    CL_err = clGetPlatformIDs(0, NULL, &numPlatforms);
-
-    printf("arg[0] = %u , arg[1] = %p, arg[2] = %p\n", args[0].of.i32, args[1].of.i32, args[2].of.i32);
+    CL_err = clGetPlatformIDs(args[0].of.i32, args[1].of.i32, &numPlatforms);
 
     wasmtime_extern_t item;
     bool GE_suc = wasmtime_caller_export_get(caller, "memory", strlen("memory"), &item);
-    if (GE_suc)
-    {
-        printf("Got export!\n");
-    }
-    else
-    {
-        printf("Failed to get export.\n");
-    }
+    assert(GE_suc);
 
     wasmtime_memory_t memory = item.of.memory;
-    printf("gt memory item! item.kind = %d\n", item.kind);
     wasmtime_context_t *context = wasmtime_caller_context(caller);
-    printf("wasm memory size = %I64u\n ", wasmtime_memory_size(context, &memory));
-    printf("wasm memory data size = %zd\n ", wasmtime_memory_data_size(context, &memory));
-    printf("get memory of numPlatforms = %u\n", (unsigned int)(wasmtime_memory_data(context, &memory)[args[2].of.i32]));
+    wasmtime_memory_data(context, &memory)[args[2].of.i32] = numPlatforms;
 
-    wasmtime_memory_data(context, &memory)[args[2].of.i32] = 2;
-
-    if (CL_err == CL_SUCCESS)
-        printf("%u platform(s) found\n", numPlatforms);
-    else
-        printf("clGetPlatformIDs(%i)\n", CL_err);
-
-    results[0].of.i32 = CL_err; // clGetPlatformIDs(args[0].of.i32, args[1].of.i32, args[1].of.i32);
     return NULL;
 }
 
