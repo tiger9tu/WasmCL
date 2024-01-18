@@ -44,24 +44,84 @@ static void exit_with_error(const char *message, wasmtime_error_t *error,
 //     return wasm_functype_new(&params, &results);
 // }
 
+void print_args(const wasmtime_val_t *args,
+    size_t nargs){
+        for (size_t i = 0; i < nargs; i++)
+        {
+            printf("arg[%d] = %p\n", i,args[i].of.i32);
+        }
+        printf("\n");
+    }
+
+uint8_t* get_wasm_base_pointer(wasmtime_caller_t *caller){
+    
+    wasmtime_extern_t item;
+    bool found = wasmtime_caller_export_get(caller, "memory", strlen("memory"), &item);
+    if(found == 0){
+        printf("memory export not found.\n");
+        assert(false);
+    }
+    wasmtime_memory_t memory = item.of.memory;
+    wasmtime_context_t *context = wasmtime_caller_context(caller);
+    return wasmtime_memory_data(context, &memory);
+}
+
+void* get_host_addr(uint8_t* base, int wasm_addr){
+    if(wasm_addr == 0)return NULL;
+    else return &base[wasm_addr];
+}
+
 wasm_trap_t *clGetPlatformIDs_callback(
     void *env, wasmtime_caller_t *caller, const wasmtime_val_t *args,
     size_t nargs, wasmtime_val_t *results, size_t nresults)
 {
-    cl_int CL_err = CL_SUCCESS;
-    cl_uint numPlatforms = 0;
-    CL_err = clGetPlatformIDs(args[0].of.i32, args[1].of.i32, &numPlatforms);
+    print_args(args,nargs);
+    uint8_t *base = get_wasm_base_pointer(caller);
 
-    wasmtime_extern_t item;
-    bool GE_suc = wasmtime_caller_export_get(caller, "memory", strlen("memory"), &item);
-    assert(GE_suc);
+    results[0].of.i32 = clGetPlatformIDs(
+        args[0].of.i32, 
+        get_host_addr(base,args[1].of.i32), 
+        get_host_addr(base,args[2].of.i32));
+    
+    printf("base = %p\n", base);
 
-    wasmtime_memory_t memory = item.of.memory;
-    wasmtime_context_t *context = wasmtime_caller_context(caller);
-    wasmtime_memory_data(context, &memory)[args[2].of.i32] = numPlatforms;
-
+    cl_platform_id *platforms = get_host_addr(base,args[1].of.i32);
+    printf("in clgp, platform = %p\n", *platforms);
     return NULL;
 }
+
+wasm_trap_t *clGetDeviceIDs_callback(
+    void *env, wasmtime_caller_t *caller, const wasmtime_val_t *args,
+    size_t nargs, wasmtime_val_t *results, size_t nresults)
+{
+    puts("calling getDeviceIDS");
+    print_args(args,nargs);
+    // cl_platform_id platform_ = (cl_platform_id)(wasmtime_get_base_pointer(caller) + args[0].of.i32);
+    // puts("in clGetDeviceIDS:");
+    // print_args(5, args);
+    // printf("base pointer = %p\n",wasmtime_get_base_pointer(caller));
+    // cl_platform_id platform;
+    // int err = clGetPlatformIDs(1, &platform, NULL);
+    // cl_device_id dev;
+    // printf("in clgetdeviceIDS, platform_ = %p, platform fake = %p\n ", platform_,platform);
+    // uint8_t *platformT = platform; 
+    // err = clGetDeviceIDs(
+    //     (cl_platform_id)platformT, 
+    //     args[1].of.i64, 
+    //     args[2].of.i32, 
+    //     (cl_device_id *)(wasmtime_get_base_pointer(caller) + args[3].of.i32), 
+    //     (cl_uint *)(wasmtime_get_base_pointer(caller) + args[4].of.i32));
+
+    // results[0].of.i32 = clGetDeviceIDs(
+    //     (cl_platform_id)wasmtime_memory_get(&args[0], caller),
+    //     args[1].of.i64, 
+    //     args[2].of.i32,
+    //     (cl_device_id *)wasmtime_memory_get(&args[3], caller),
+    //     (cl_uint *)wasmtime_memory_get(&args[4], caller));
+    printf("finished calling clGetDeviceIds!\n");
+    return NULL;
+}
+
 
 #define MAX_CL_NAME 30
 #define MAX_CL_PARAM 8
@@ -79,14 +139,25 @@ typedef struct
 
 } define_func;
 
-define_func func_array[1] = {
-    {.name = "clGetPlatformIDs",
-     .name_len = 16, // this is a problem
-     .param_types = {
-         WASM_I32, WASM_I32, WASM_I32},
-     .param_len = 3,
-     .result_type = WASM_I32,
-     .cb = clGetPlatformIDs_callback}};
+define_func func_array[2] = {
+    {
+    .name = "clGetPlatformIDs",
+    .name_len = 16, // this is a problem
+    .param_types = {
+        WASM_I32, WASM_I32, WASM_I32},
+    .param_len = 3,
+    .result_type = WASM_I32,
+    .cb = clGetPlatformIDs_callback
+    },
+    {
+    .name = "clGetDeviceIDs",
+    .name_len = 14,
+    .param_types = {WASM_I32, WASM_I64, WASM_I32, WASM_I32, WASM_I32},
+    .param_len = 5,
+    .result_type = WASM_I32,
+    .cb = clGetDeviceIDs_callback
+    }
+};
 
 int register_func_to_linker(define_func funcs[], int count, wasmtime_linker_t *linker, const char *module, size_t module_len)
 {
@@ -191,7 +262,7 @@ int main(int argc, char *argv[])
 
     // Create external functions
     printf("Creating callback...\n");
-    register_func_to_linker(func_array, 1, linker, "env", 3);
+    register_func_to_linker(func_array, 2, linker, "env", 3);
 
     // Instantiate the module
     error = wasmtime_linker_module(linker, context, "", 0, module);
