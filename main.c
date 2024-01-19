@@ -16,8 +16,7 @@ typedef enum{
 
 #define MAX_ADDR_NUM 100000
 typedef struct {
-    uint8_t *host_addr_array[MAX_ADDR_NUM];
-    int host_addr_num;
+    uint64_t offset; // real HOST addr = offset << 32 + wasm addr
     uint8_t* base;
 }MemControl;
 
@@ -34,12 +33,29 @@ void print_args(const wasmtime_val_t *args,
 }
 
 
+void check_offset(){ // stack offset =  current heap address >> 32 << 32
+    int var;
+    int *stack_ptr = (int*)malloc(sizeof(var));
+    free(stack_ptr);
+    uint64_t cur_offset = ((uint64_t)stack_ptr >> 32) << 32;
+    printf("*stackptr = %p\n",stack_ptr);
+    printf("cur_offset = %llx\n", cur_offset);
+    if(MemController.offset == 0){
+        // initiate
+        MemController.offset = cur_offset;
+    }else{
+        if(MemController.offset != cur_offset){
+            printf("warning: offset changed from %llx to %llx", MemController.offset, cur_offset);
+            MemController.offset = cur_offset;
+        }   
+    }
+}
 
 void* get_host_addr(int wasm_addr, MEM_TYPE tag){
     switch (tag)
     {
     case HOST:
-        return (void *)(MemController.host_addr_array[wasm_addr]);
+        return (void *)(MemController.offset + wasm_addr);
         break;
     case WASM:
         if(wasm_addr == 0){return NULL;}
@@ -56,6 +72,7 @@ wasm_trap_t *clGetPlatformIDs_callback(
     void *env, wasmtime_caller_t *caller, const wasmtime_val_t *args,
     size_t nargs, wasmtime_val_t *results, size_t nresults)
 {
+    check_offset();
     print_args(args,nargs);
 
     results[0].of.i32 = clGetPlatformIDs(
@@ -74,23 +91,21 @@ wasm_trap_t *clGetDeviceIDs_callback(
     void *env, wasmtime_caller_t *caller, const wasmtime_val_t *args,
     size_t nargs, wasmtime_val_t *results, size_t nresults)
 {
+    check_offset();
     puts("calling getDeviceIDS");
     print_args(args,nargs);
-    // cl_platform_id platform_ = (cl_platform_id)(wasmtime_get_base_pointer(caller) + args[0].of.i32);
-    // puts("in clGetDeviceIDS:");
-    // print_args(5, args);
-    // printf("base pointer = %p\n",wasmtime_get_base_pointer(caller));
-    // cl_platform_id platform;
-    // int err = clGetPlatformIDs(1, &platform, NULL);
-    // cl_device_id dev;
-    // printf("in clgetdeviceIDS, platform_ = %p, platform fake = %p\n ", platform_,platform);
+
+    cl_platform_id platform;
+    int err = clGetPlatformIDs(1, &platform, NULL);
+    cl_device_id dev;
+    printf("in clgetdeviceIDS, platform_ = %p, platform fake = %p\n ", (cl_platform_id)get_host_addr(args[0].of.i32,HOST),platform);
     // uint8_t *platformT = platform; 
-    // err = clGetDeviceIDs(
-    //     (cl_platform_id)platformT, 
-    //     args[1].of.i64, 
-    //     args[2].of.i32, 
-    //     (cl_device_id *)(wasmtime_get_base_pointer(caller) + args[3].of.i32), 
-    //     (cl_uint *)(wasmtime_get_base_pointer(caller) + args[4].of.i32));
+    results[0].of.i32 = clGetDeviceIDs(
+        (cl_platform_id)get_host_addr(args[0].of.i32,HOST), 
+        args[1].of.i64, 
+        args[2].of.i32, 
+        (cl_device_id *)get_host_addr(args[3].of.i32,WASM), 
+        (cl_uint *)get_host_addr(args[4].of.i32,WASM));
 
     // results[0].of.i32 = clGetDeviceIDs(
     //     (cl_platform_id)wasmtime_memory_get(&args[0], caller),
