@@ -9,40 +9,20 @@
 static void exit_with_error(const char *message, wasmtime_error_t *error,
                             wasm_trap_t *trap);
 
-// // my fake function
-// //  (import "env" "clGetDeviceIDs" (func $clGetDeviceIDs (type 3)))
-// //   (import "env" "clCreateProgramWithSource" (func $clCreateProgramWithSource (type 4)))
-// //   (import "env" "clBuildProgram" (func $clBuildProgram (type 5)))
-// //   (import "env" "clGetProgramBuildInfo" (func $clGetProgramBuildInfo (type 5)))
-// //   (import "env" "clCreateContext" (func $clCreateContext (type 5)))
-// //   (import "env" "clCreateBuffer" (func $clCreateBuffer (type 3)))
-// //   (import "env" "clCreateCommandQueue" (func $clCreateCommandQueue (type 6)))
-// //   (import "env" "clCreateKernel" (func $clCreateKernel (type 1)))
-// //   (import "env" "clSetKernelArg" (func $clSetKernelArg (type 7)))
-// //   (import "env" "clEnqueueNDRangeKernel" (func $clEnqueueNDRangeKernel (type 8)))
-// //   (import "env" "clEnqueueReadBuffer" (func $clEnqueueReadBuffer (type 8)))
-// //   (import "env" "clReleaseKernel" (func $clReleaseKernel (type 0)))
-// //   (import "env" "clReleaseMemObject" (func $clReleaseMemObject (type 0)))
-// //   (import "env" "clReleaseCommandQueue" (func $clReleaseCommandQueue (type 0)))
-// //   (import "env" "clReleaseProgram" (func $clReleaseProgram (type 0)))
-// //   (import "env" "clReleaseContext" (func $clReleaseContext (type 0)))
+typedef enum{
+        HOST,
+        WASM
+    }MEM_TYPE;
 
-// WASM_API_EXTERN wasmtime_error_t *wasmtime_linker_define_func(
-//     wasmtime_linker_t *linker, const char *module, size_t module_len,
-//     const char *name, size_t name_len, const wasm_functype_t *ty,
-//     wasmtime_func_callback_t cb, void *data, void (*finalizer)(void *));
+#define MAX_ADDR_NUM 100000
+typedef struct {
+    uint8_t *host_addr_array[MAX_ADDR_NUM];
+    int host_addr_num;
+    uint8_t* base;
+}MemControl;
 
-// static inline wasm_functype_t *wasm_functype_new_3_1(
-//     wasm_valtype_t *p1, wasm_valtype_t *p2, wasm_valtype_t *p3,
-//     wasm_valtype_t *r)
-// {
-//     wasm_valtype_t *ps[3] = {p1, p2, p3};
-//     wasm_valtype_t *rs[1] = {r};
-//     wasm_valtype_vec_t params, results;
-//     wasm_valtype_vec_new(&params, 3, ps);
-//     wasm_valtype_vec_new(&results, 1, rs);
-//     return wasm_functype_new(&params, &results);
-// }
+MemControl MemController;
+
 
 void print_args(const wasmtime_val_t *args,
     size_t nargs){
@@ -51,24 +31,25 @@ void print_args(const wasmtime_val_t *args,
             printf("arg[%d] = %p\n", i,args[i].of.i32);
         }
         printf("\n");
-    }
-
-uint8_t* get_wasm_base_pointer(wasmtime_caller_t *caller){
-    
-    wasmtime_extern_t item;
-    bool found = wasmtime_caller_export_get(caller, "memory", strlen("memory"), &item);
-    if(found == 0){
-        printf("memory export not found.\n");
-        assert(false);
-    }
-    wasmtime_memory_t memory = item.of.memory;
-    wasmtime_context_t *context = wasmtime_caller_context(caller);
-    return wasmtime_memory_data(context, &memory);
 }
 
-void* get_host_addr(uint8_t* base, int wasm_addr){
-    if(wasm_addr == 0)return NULL;
-    else return &base[wasm_addr];
+
+
+void* get_host_addr(int wasm_addr, MEM_TYPE tag){
+    switch (tag)
+    {
+    case HOST:
+        return (void *)(MemController.host_addr_array[wasm_addr]);
+        break;
+    case WASM:
+        if(wasm_addr == 0){return NULL;}
+        else {return &MemController.base[wasm_addr];}
+    default:
+        printf("no memroy type provided!\n");
+        assert(false);
+        break;
+    }
+    
 }
 
 wasm_trap_t *clGetPlatformIDs_callback(
@@ -76,17 +57,16 @@ wasm_trap_t *clGetPlatformIDs_callback(
     size_t nargs, wasmtime_val_t *results, size_t nresults)
 {
     print_args(args,nargs);
-    uint8_t *base = get_wasm_base_pointer(caller);
 
     results[0].of.i32 = clGetPlatformIDs(
         args[0].of.i32, 
-        get_host_addr(base,args[1].of.i32), 
-        get_host_addr(base,args[2].of.i32));
+        get_host_addr(args[1].of.i32, WASM), 
+        get_host_addr(args[2].of.i32, WASM));
     
-    printf("base = %p\n", base);
+    //printf("base = %p\n", base);
 
-    cl_platform_id *platforms = get_host_addr(base,args[1].of.i32);
-    printf("in clgp, platform = %p\n", *platforms);
+    // cl_platform_id *platforms = get_host_addr(base,args[1].of.i32);
+    // printf("in clgp, platform = %p\n", *platforms);
     return NULL;
 }
 
@@ -199,7 +179,6 @@ int register_func_to_linker(define_func funcs[], int count, wasmtime_linker_t *l
 int main(int argc, char *argv[])
 {
 
-    // Set up our context
     wasm_engine_t *engine = wasm_engine_new();
     assert(engine != NULL);
     wasmtime_store_t *store = wasmtime_store_new(engine, NULL, NULL);
@@ -269,20 +248,30 @@ int main(int argc, char *argv[])
     if (error != NULL)
         exit_with_error("failed to instantiate module", error, NULL);
 
-    // Run it.
-    wasmtime_func_t func;
-    error = wasmtime_linker_get_default(linker, context, "", 0, &func);
+    wasmtime_instance_t instance;
+    error = wasmtime_linker_instantiate(linker, context, module,
+                                      &instance, NULL);
     if (error != NULL)
-        exit_with_error("failed to locate default export for module", error, NULL);
+        exit_with_error("failed to instantiate linking1", error, trap);
 
-    error = wasmtime_func_call(context, &func, NULL, 0, NULL, 0, &trap);
+    // get memory
+    wasmtime_memory_t memory;
+     wasmtime_func_t size_func, load_func, store_func;
+    wasmtime_extern_t item;
+    int ok = wasmtime_instance_export_get(context, &instance, "memory",
+                                    strlen("memory"), &item);
+    assert(ok && item.kind == WASMTIME_EXTERN_MEMORY);
+    memory = item.of.memory;
+    MemController.base = wasmtime_memory_data(context, &memory);
+  // Lookup our `run` export function
+    wasmtime_extern_t run;
+    ok = wasmtime_instance_export_get(context, &instance, "_start", strlen("_start"), &run);
+    assert(ok);
+    assert(run.kind == WASMTIME_EXTERN_FUNC);
+    error = wasmtime_func_call(context, &run.of.func, NULL, 0, NULL, 0, &trap);
     if (error != NULL || trap != NULL)
-        exit_with_error("error calling default export", error, trap);
+        exit_with_error("failed to call run", error, trap);
 
-    // Clean up after ourselves at this point
-    wasmtime_module_delete(module);
-    wasmtime_store_delete(store);
-    wasm_engine_delete(engine);
     return 0;
 }
 
