@@ -17,6 +17,7 @@ typedef struct
 
 } define_func;
 
+#define FUNC_NUM 3
 
 wasm_trap_t *clGetPlatformIDs_callback(
     void *env, wasmtime_caller_t *caller, const wasmtime_val_t *args,
@@ -29,6 +30,19 @@ wasm_trap_t *clGetDeviceIDs_callback(
 wasm_trap_t *clCreateContext_callback(
     void *env, wasmtime_caller_t *caller, const wasmtime_val_t *args,
     size_t nargs, wasmtime_val_t *results, size_t nresults);
+
+wasm_trap_t *clCreateProgramWithSource_callback(
+    void *env, wasmtime_caller_t *caller, const wasmtime_val_t *args,
+    size_t nargs, wasmtime_val_t *results, size_t nresults);
+
+wasm_trap_t *clBuildProgram_callback(
+    void *env, wasmtime_caller_t *caller, const wasmtime_val_t *args,
+    size_t nargs, wasmtime_val_t *results, size_t nresults);
+
+wasm_trap_t *clGetProgramBuildInfo_callback(
+    void *env, wasmtime_caller_t *caller, const wasmtime_val_t *args,
+    size_t nargs, wasmtime_val_t *results, size_t nresults);
+
 
 int register_func_to_linker(define_func funcs[], 
 int count, wasmtime_linker_t *linker, 

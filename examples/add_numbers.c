@@ -24,10 +24,14 @@ The `device` structure corresponds to the first accessible device
 associated with the platform. Because the second parameter is 
 `CL_DEVICE_TYPE_GPU`, this device must be a GPU.
 */
-cl_device_id create_device() {
-
+cl_device_id create_device(cl_context context) {
+   int test0 = 89999;
    cl_platform_id platform;
+   
+   int test1 = 89999;
+   int test2 = 89999;
    cl_device_id dev;
+   int test3 = 89999;
    int err;
 
    /* Identify a platform */
@@ -39,7 +43,7 @@ cl_device_id create_device() {
 
    // Access a device
    // GPU
-   printf("in wasm, platform = %p\n",platform);
+   
    err = clGetDeviceIDs(platform, CL_DEVICE_TYPE_GPU, 1, &dev, NULL);
    if(err == CL_DEVICE_NOT_FOUND) {
       // CPU
@@ -49,7 +53,9 @@ cl_device_id create_device() {
       perror("Couldn't access any devices");
       exit(1);   
    }
-
+   printf("in wasm, &dev = %p, dev=%p\n",&dev,dev);
+   context = clCreateContext(NULL, 1, &dev, NULL, NULL, &err);
+   printf("test0 = %d; test1 = %d; test2 = %d; test3 = %d\n", test0,test1,test2,test3);
    return dev;
 }
 
@@ -150,16 +156,16 @@ int main() {
    Creates a context containing only one device — the device structure 
    created earlier.
    */
-   device = create_device();
+   device = create_device(context);
    
-   context = clCreateContext(NULL, 1, &device, NULL, NULL, &err);
-   if(err < 0) {
-      perror("Couldn't create a context");
-      exit(1);   
-   }
+   // context = clCreateContext(NULL, 1, &device, NULL, NULL, &err);
+   // if(err < 0) {
+   //    perror("Couldn't create a context");
+   //    exit(1);   
+   // }
 
    /* Build program */
-   program = build_program(context, device, PROGRAM_FILE);
+   // program = build_program(context, device, PROGRAM_FILE);
 
    // /* Create data buffer 
 
