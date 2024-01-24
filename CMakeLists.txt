@@ -8,27 +8,23 @@ add_subdirectory(${WASMTIME_ROOT}/crates/c-api ${CMAKE_CURRENT_BINARY_DIR}/wasmt
 
 find_package(OpenCL)
 
-function(CREATE_TARGET TARGET TARGET_PATH)
-	add_executable(wasmtime-${TARGET} ${TARGET_PATH})
+add_executable(wasmtime-cl main.c wrap.c mem.c)
 
-	if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
-		target_compile_options(wasmtime-${TARGET} PRIVATE -Wall -Wextra -Wno-deprecated-declarations)
-	elseif(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
-		target_compile_options(wasmtime-${TARGET} PRIVATE /W3)
-	endif()
 
-	set_target_properties(wasmtime-${TARGET} PROPERTIES
-		OUTPUT_NAME wasmtime-${TARGET}
-		RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/$<0:>
-		CXX_VISIBILITY_PRESET hidden
-		POSITION_INDEPENDENT_CODE ON)
+if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+	target_compile_options(wasmtime-cl PRIVATE -Wall -Wextra -Wno-deprecated-declarations)
+elseif(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
+	target_compile_options(wasmtime-cl PRIVATE /W3)
+endif()
 
-	target_include_directories(wasmtime-${TARGET} PUBLIC wasmtime)
-	target_link_libraries(wasmtime-${TARGET} PUBLIC wasmtime)
+set_target_properties(wasmtime-cl PROPERTIES
+	OUTPUT_NAME wasmtime-cl
+	RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/$<0:>
+	CXX_VISIBILITY_PRESET hidden
+	POSITION_INDEPENDENT_CODE ON)
 
-	target_include_directories(wasmtime-${TARGET} PRIVATE ${OpenCL_INCLUDE_DIRS})
-	target_link_libraries(wasmtime-${TARGET} PRIVATE ${OpenCL_LIBRARIES})
+	target_include_directories(wasmtime-cl PUBLIC wasmtime)
+	target_link_libraries(wasmtime-cl PUBLIC wasmtime)
 
-endfunction()
-
-create_target(cl main.c)
+	target_include_directories(wasmtime-cl PRIVATE ${OpenCL_INCLUDE_DIRS})
+	target_link_libraries(wasmtime-cl PRIVATE ${OpenCL_LIBRARIES})
