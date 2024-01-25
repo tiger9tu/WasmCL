@@ -67,6 +67,7 @@ int main(int argc, char *argv[])
     wasi_config_inherit_stdin(wasi_config);
     wasi_config_inherit_stdout(wasi_config);
     wasi_config_inherit_stderr(wasi_config);
+    wasi_config_preopen_dir(wasi_config, "../examples", ".");
     wasm_trap_t *trap = NULL;
     error = wasmtime_context_set_wasi(context, wasi_config);
     if (error != NULL)
@@ -96,8 +97,6 @@ int main(int argc, char *argv[])
     assert(ok && item.kind == WASMTIME_EXTERN_MEMORY);
     memory = item.of.memory;
 
-
-    MemController_init();
     MemController.base = (uintptr_t)wasmtime_memory_data(context, &memory);
     
     // Lookup our `run` export function

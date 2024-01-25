@@ -17,7 +17,7 @@ typedef struct
 
 } define_func;
 
-#define FUNC_NUM 3
+#define FUNC_NUM 6
 
 wasm_trap_t *clGetPlatformIDs_callback(
     void *env, wasmtime_caller_t *caller, const wasmtime_val_t *args,

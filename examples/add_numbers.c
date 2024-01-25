@@ -24,14 +24,11 @@ The `device` structure corresponds to the first accessible device
 associated with the platform. Because the second parameter is 
 `CL_DEVICE_TYPE_GPU`, this device must be a GPU.
 */
-cl_device_id create_device(cl_context context) {
-   int test0 = 89999;
+cl_device_id create_device() {
+
    cl_platform_id platform;
-   
-   int test1 = 89999;
-   int test2 = 89999;
+
    cl_device_id dev;
-   int test3 = 89999;
    int err;
 
    /* Identify a platform */
@@ -53,9 +50,7 @@ cl_device_id create_device(cl_context context) {
       perror("Couldn't access any devices");
       exit(1);   
    }
-   printf("in wasm, &dev = %p, dev=%p\n",&dev,dev);
-   context = clCreateContext(NULL, 1, &dev, NULL, NULL, &err);
-   printf("test0 = %d; test1 = %d; test2 = %d; test3 = %d\n", test0,test1,test2,test3);
+   
    return dev;
 }
 
@@ -86,6 +81,7 @@ cl_program build_program(cl_context ctx, cl_device_id dev, const char* filename)
    fread(program_buffer, sizeof(char), program_size, program_handle);
    fclose(program_handle);
 
+   printf("successfully opened file\n");
    /* Create program from file 
 
    Creates a program from the source code in the add_numbers.cl file. 
@@ -99,7 +95,6 @@ cl_program build_program(cl_context ctx, cl_device_id dev, const char* filename)
       exit(1);
    }
    free(program_buffer);
-
    /* Build program 
 
    The fourth parameter accepts options that configure the compilation. 
@@ -108,6 +103,7 @@ cl_program build_program(cl_context ctx, cl_device_id dev, const char* filename)
    with -cl-opt-disable.
    */
    err = clBuildProgram(program, 0, NULL, NULL, NULL, NULL);
+   printf("err = %d\n",err);
    if(err < 0) {
 
       /* Find size of log and print to std output */
@@ -156,16 +152,16 @@ int main() {
    Creates a context containing only one device — the device structure 
    created earlier.
    */
-   device = create_device(context);
+   device = create_device();
    
-   // context = clCreateContext(NULL, 1, &device, NULL, NULL, &err);
-   // if(err < 0) {
-   //    perror("Couldn't create a context");
-   //    exit(1);   
-   // }
+   context = clCreateContext(NULL, 1, &device, NULL, NULL, &err);
+   if(err < 0) {
+      perror("Couldn't create a context");
+      exit(1);   
+   }
 
    /* Build program */
-   // program = build_program(context, device, PROGRAM_FILE);
+   program = build_program(context, device, PROGRAM_FILE);
 
    // /* Create data buffer 
 

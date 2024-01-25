@@ -4,7 +4,12 @@
 #include <stdio.h>
 #include <CL/cl.h>
 
-int register_func_to_linker(define_func funcs[], int count, wasmtime_linker_t *linker, const char *module, size_t module_len)
+int register_func_to_linker(
+    define_func funcs[], 
+    int count, 
+    wasmtime_linker_t *linker, 
+    const char *module, 
+    size_t module_len)
 {
     for (size_t i = 0; i < count; i++)
     {
@@ -70,21 +75,21 @@ define_func func_array[30] = {
     .param_types = {WASM_I32, WASM_I32, WASM_I32, WASM_I32, WASM_I32},
     .param_len = 5,
     .result_type = WASM_I32,
-    .cb = clGetPlatformIDs_callback
+    .cb = clCreateProgramWithSource_callback
     },
     {
     .name = "clBuildProgram",
     .param_types = {WASM_I32, WASM_I32, WASM_I32, WASM_I32, WASM_I32, WASM_I32},
     .param_len = 6,
     .result_type = WASM_I32,
-    .cb = clGetDeviceIDs_callback
+    .cb = clBuildProgram_callback
     },
     {
     .name = "clGetProgramBuildInfo",
     .param_types = {WASM_I32, WASM_I32, WASM_I32, WASM_I32, WASM_I32 ,WASM_I32},
     .param_len = 6,
     .result_type = WASM_I32,
-    .cb = clCreateContext_callback
+    .cb = clGetProgramBuildInfo_callback
     }
 };
 
@@ -100,32 +105,31 @@ wasm_trap_t *clGetPlatformIDs_callback(
     void *env, wasmtime_caller_t *caller, const wasmtime_val_t *args,
     size_t nargs, wasmtime_val_t *results, size_t nresults)
 {
-    check_offset();
     puts("calling clGetPlatformIDS");
     print_args(args,nargs);
 
-    cl_uint num_entries = args[0].of.i32;
-    uint32_t* platforms = get_host_addr(args[1].of.i32, WASM);
+    // cl_uint num_entries = args[0].of.i32;
+    // uint32_t* platforms = get_host_addr(args[1].of.i32, WASM);
 
-    cl_platform_id* fake_platforms;
-    if(platforms == NULL){
-        fake_platforms = NULL;
-    }else{
-        fake_platforms = get_fake_addr_list(0,num_entries);
-    }
-     
+    // cl_platform_id fake_platforms[MAX_PTR_DEPTH];
+    // void* addr64_arg_platforms = fake_platforms;
+    // if(platforms == NULL){
+    //     addr64_arg_platforms = NULL;
+    // }else{
+    //     make_fake_addr_list(fake_platforms,num_entries);
+    // }
+    // wasm32位地址不能作为opencl函数参数，因此需要创建64位地址作为参数，调用完后再将结果拷贝到wasm32位地址中
+    intptr_t buffer[MAX_PTR_DEPTH];
+    intptr_t* addr64_arg_platforms = get_addr64_arg_w(
+                                buffer, get_host_addr(args[1].of.i32, WASM), args[0].of.i32, 1);
+    
     results[0].of.i32 = clGetPlatformIDs(
-        num_entries, 
-        fake_platforms, 
+        args[0].of.i32, 
+        addr64_arg_platforms, 
         get_host_addr(args[2].of.i32, WASM));
 
-    if(platforms)
-        for (size_t i = 0; i < num_entries; i++)
-        {
-            platforms[i] = (uint32_t)fake_platforms[i];
-        }
+    cp_host_addr_to_wasm(get_host_addr(args[1].of.i32, WASM), addr64_arg_platforms, args[0].of.i32);
     
-    recover_fake_addr_list(0,num_entries);
     puts("clGetPlatformIDs finished\n");
     return NULL;
 }
@@ -134,35 +138,24 @@ wasm_trap_t *clGetDeviceIDs_callback(
     void *env, wasmtime_caller_t *caller, const wasmtime_val_t *args,
     size_t nargs, wasmtime_val_t *results, size_t nresults)
 {
-    check_offset();
     puts("\ncalling getDeviceIDS");
     print_args(args,nargs);
     
     cl_uint num_entries = args[2].of.i32;
     uint32_t* devices = (cl_device_id *)get_host_addr(args[3].of.i32,WASM);
 
-    cl_device_id *fake_devices;
-    if(devices == NULL){
-        fake_devices = NULL;
-    }else{
-        fake_devices = get_fake_addr_list(0, num_entries);
-    }
+    intptr_t buffer[MAX_PTR_DEPTH];
+    intptr_t* addr64_arg_devices = get_addr64_arg_w(buffer, devices,  num_entries, 1);
 
     results[0].of.i32 = clGetDeviceIDs(
         get_host_addr(args[0].of.i32,TRUNC), 
         args[1].of.i64, 
         args[2].of.i32, 
-        fake_devices, 
+        addr64_arg_devices, 
         get_host_addr(args[4].of.i32,WASM));
 
-    for (size_t i = 0; i < num_entries; i++)
-    {
-        printf("fake devices %d = %p\n", i, fake_devices[i]);
-        devices[i] = (uint32_t)fake_devices[i];
-    }
-    printf("in clGetDeviceIDs, devices = %p, devices[0] = %p\n", devices, devices[0]);
+    cp_host_addr_to_wasm(devices, addr64_arg_devices, num_entries);
     
-    recover_fake_addr_list(0, num_entries);
     puts("finished calling getDeviceIDS");
     return NULL;
 }
@@ -178,55 +171,95 @@ wasm_trap_t *clCreateContext_callback(
 
     cl_uint num_devices =  args[1].of.i32;
     uint32_t* devices = get_host_addr(args[2].of.i32, WASM);
-    printf("in clCreateContext, devices = %p\n", devices);
-    cl_device_id *fake_devices;
-    if(devices == NULL){
-        fake_devices = NULL;
-    }else{
-        fake_devices = get_fake_addr_list(0, num_devices);
-        for (size_t i = 0; i < num_devices; i++)
-        {
-            printf("hil\n");
-            printf("host addr devices %d = %p, devices[0] = %p , hostaddr_devices[0] = %p\n",i ,devices, devices[0], get_host_addr(devices[i], TRUNC));
-            printf("base = %p\n", MemController.base);
-            printf("offset = %p\n", MemController.offset);
-            fake_devices[i] = get_host_addr(devices[i], TRUNC);
-        }
-    }
+    uintptr_t buffer[MAX_PTR_DEPTH];
+    uintptr_t* addr64_arg_devices = get_addr64_arg_r(buffer, devices, TRUNC, num_devices,1);
 
     results[0].of.i32 = clCreateContext(
         get_host_addr(args[0].of.i32, WASM),
         num_devices,
-        fake_devices,
+        addr64_arg_devices,
         get_host_addr(args[3].of.i32, WASM),
         get_host_addr(args[4].of.i32, WASM),
         get_host_addr(args[5].of.i32, WASM));
     
-    recover_fake_addr_list(0,num_devices);
     puts("clCreateContext finished\n");
     return NULL;
 }
 
 
-// wasm_trap_t *clCreateProgramWithSource_callback(
-//     void *env, wasmtime_caller_t *caller, const wasmtime_val_t *args,
-//     size_t nargs, wasmtime_val_t *results, size_t nresults){
-//     check_offset();
-//     puts("\ncalling clCreateProgramWithSource");
-//     print_args(args,nargs);
-//     // results[0].of.i32 = clCreateProgramWithSource(
-//     // )
-//     );
+wasm_trap_t *clCreateProgramWithSource_callback(
+    void *env, wasmtime_caller_t *caller, const wasmtime_val_t *args,
+    size_t nargs, wasmtime_val_t *results, size_t nresults){
+    check_offset();
+    puts("\ncalling clCreateProgramWithSource");
+    print_args(args,nargs);
+
+    // cl_uint count = args[1].of.i32;
+    // char** strings = get_host_addr(args[2].of.i32, WASM);
+    // char* fake_strings[MAX_PTR_DEPTH];
     
-// }
+    // char** arg_fake_strings;
+    // if(strings == NULL){
+    //     arg_fake_strings = NULL;
+    // }else{
+    //     for (size_t i = 0; i < count; i++)
+    //     {
+    //         fake_strings[i] = get_host_addr(strings[i],WASM);
+    //     }
+    //     arg_fake_strings = fake_strings;
+    // }
+    uintptr_t buffer[MAX_PTR_DEPTH];
+    uintptr_t* addr64_arg_strings = get_addr64_arg_r(
+        buffer, get_host_addr(args[2].of.i32, WASM), WASM,args[1].of.i32, 1);
 
-// wasm_trap_t *clBuildProgram_callback(
-//     void *env, wasmtime_caller_t *caller, const wasmtime_val_t *args,
-//     size_t nargs, wasmtime_val_t *results, size_t nresults);
+    results[0].of.i32 = clCreateProgramWithSource(
+        get_host_addr(args[0].of.i32, TRUNC),
+        args[1].of.i32,
+        addr64_arg_strings,
+        get_host_addr(args[3].of.i32, WASM),
+        get_host_addr(args[4].of.i32, WASM));
+    
+    puts("clCreateProgramWithSource finished\n");
+    return NULL;
+}
 
-// wasm_trap_t *clGetProgramBuildInfo_callback(
-//     void *env, wasmtime_caller_t *caller, const wasmtime_val_t *args,
-//     size_t nargs, wasmtime_val_t *results, size_t nresults);
+wasm_trap_t *clBuildProgram_callback(
+    void *env, wasmtime_caller_t *caller, const wasmtime_val_t *args,
+    size_t nargs, wasmtime_val_t *results, size_t nresults){
+    
+    print_args(args, nargs);
+    intptr_t buffer[MAX_PTR_DEPTH];
+    intptr_t* addr64_arg_device_list = get_addr64_arg_r(
+        buffer, get_host_addr(args[2].of.i32,WASM),TRUNC,args[1].of.i32,1);
+
+    results[0].of.i32 = clBuildProgram(
+        get_host_addr(args[0].of.i32, TRUNC),
+        args[1].of.i32,
+        addr64_arg_device_list,
+        get_host_addr(args[3].of.i32, WASM),
+        get_host_addr(args[4].of.i32, WASM),
+        get_host_addr(args[5].of.i32, WASM)
+    );
+
+    return NULL;
+}
+
+
+wasm_trap_t *clGetProgramBuildInfo_callback(
+    void *env, wasmtime_caller_t *caller, const wasmtime_val_t *args,
+    size_t nargs, wasmtime_val_t *results, size_t nresults){
+
+    results[0].of.i32 = clGetProgramBuildInfo(
+        get_host_addr(args[0].of.i32, WASM),
+        get_host_addr(args[1].of.i32, TRUNC),
+        args[2].of.i32,
+        args[3].of.i32,
+        get_host_addr(args[4].of.i32, WASM),
+        get_host_addr(args[5].of.i32, WASM)
+    );    
+    
+    return NULL;
+}
 
 
 
