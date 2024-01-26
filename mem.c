@@ -27,6 +27,10 @@ void check_offset(){ // heap offset =  current heap address >> 32 << 32
 
 
 void* get_host_addr(uint32_t wasm_addr, MEM_TYPE tag){
+    if(wasm_addr >> 20 != 0 && tag == WASM){
+        printf("warning!, tag may not be WASM as wasm_addr = %p\n", wasm_addr);
+    }
+
     uintptr_t wasm_addr_64 = (uintptr_t)wasm_addr;
     switch (tag)  
     {
@@ -41,6 +45,14 @@ void* get_host_addr(uint32_t wasm_addr, MEM_TYPE tag){
         return NULL;
     }
     
+}
+
+void *get_host_addr_auto(uint32_t wasm_addr){
+    if(wasm_addr == NULL)return NULL;
+    if(wasm_addr >> 20 != 0){
+        return get_host_addr(wasm_addr, TRUNC);
+    }
+    return get_host_addr(wasm_addr, WASM);
 }
 
 // 获得一个连续的链表
@@ -77,7 +89,7 @@ void* get_addr64_arg_r(void* buffer[], uint32_t target[], MEM_TYPE mt, size_t le
 }
 
 void cp_host_addr_to_wasm(uint32_t wasm_addr_buffer[], uintptr_t host_addr_buffer[], size_t count){
-    if(host_addr_buffer == NULL) return;
+    if(host_addr_buffer == NULL || wasm_addr_buffer == NULL) return;
     for (size_t i = 0; i < count; i++)
     {
         wasm_addr_buffer[i] = (uint32_t)host_addr_buffer[i];

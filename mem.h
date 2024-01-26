@@ -16,12 +16,10 @@ typedef struct {
 
 extern MemControl MemController;
 
-// void MemController_init();
-
-void check_offset();
 void *get_host_addr(uint32_t wasm_addr, MEM_TYPE tag);
-void make_fake_addr_list(intptr_t* start, size_t count);
+void *get_host_addr_auto(uint32_t wasm_addr);
 void* get_addr64_arg_w(void* buffer[], void* start, size_t length, size_t depth);
-void* get_addr64_arg_r(void* buffer[], void* target[], MEM_TYPE mt, size_t length, size_t depth);
+void* get_addr64_arg_r(void* buffer[], uint32_t target[], MEM_TYPE mt, size_t length, size_t depth);
 void cp_host_addr_to_wasm(uint32_t wasm_addr_buffer[], uintptr_t host_addr_buffer[], size_t count);
+
 #endif // MEM_H
