@@ -3,7 +3,7 @@
 
 #include <wasm.h>
 #include <wasmtime.h>
-
+#include <CL/cl.h>
 #define MAX_CL_NAME 30
 #define MAX_CL_PARAM 12
 
@@ -17,7 +17,7 @@ typedef struct
 
 } define_func;
 
-#define FUNC_NUM 12
+#define FUNC_NUM 17
 
 int register_func_to_linker(define_func funcs[], 
     int count, wasmtime_linker_t *linker, 
@@ -25,5 +25,6 @@ int register_func_to_linker(define_func funcs[],
     size_t module_len);
 
 extern define_func func_array[];
+extern cl_mem cl_buffer; // TODO: remove
 
 #endif // WRAP_H

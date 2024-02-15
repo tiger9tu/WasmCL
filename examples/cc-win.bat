@@ -24,3 +24,8 @@ set "FILENAME=%1"
 "%WASI_SDK_ROOT%\share\wasi-sysroot\lib\wasm32-wasi\crt1-command.o" "%FILENAME%.o" -lc "%WASI_SDK_ROOT%\lib\clang\17\lib\wasi\libclang_rt.builtins-wasm32.a" -o "%FILENAME%.wasm" --import-undefined
 
 "%WABT_ROOT%\bin\wasm2wat.exe" "%FILENAME%.wasm" > "%FILENAME%.wat"
+
+call "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build\vcvarsall.bat" amd64
+
+cl.exe /nologo /TC /W4 /DCL_TARGET_OPENCL_VERSION=100 /I%CL_ROOT%\install\include\ ^
+%FILENAME% /Fe:%FILENAME%-CL.exe /link /LIBPATH:%CL_ROOT%\install\lib OpenCL.lib

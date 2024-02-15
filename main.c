@@ -4,10 +4,10 @@
 #include <wasi.h>
 #include "mem.h"
 #include "wrap.h"
-#include "mem.h"
 
 static void exit_with_error(const char *message, 
 wasmtime_error_t *error,wasm_trap_t *trap);
+
 
 int main(int argc, char *argv[])
 {
