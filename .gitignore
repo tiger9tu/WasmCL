@@ -1,6 +1,9 @@
 /build
+*.spv
+*.bc
+*.log
 
-# Wasm 
+# Wasm
 *.wat
 *.wasm
 

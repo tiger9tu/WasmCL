@@ -80,55 +80,185 @@ const char *KernelSource = "\n" \
 "\n";
 
 ////////////////////////////////////////////////////////////////////////////////
+int platformSupportsSPIRV(cl_platform_id platform) {
+    cl_int ret;
+    char extensions[102400];
 
-// Offline compilation
-int read_spirv_from_file(const char* filename,
-                          cl_uchar *buffer,
-                          size_t* filesize){
-    
-    FILE *file;
-    size_t file_size;
-    // 打开二进制文件，以二进制只读方式打开
-    file = fopen(filename, "rb");
+    // 获取平台的扩展字符串
+    ret = clGetPlatformInfo(platform, CL_PLATFORM_EXTENSIONS, sizeof(extensions), extensions, NULL);
+    if (ret != CL_SUCCESS) {
+        printf("Error getting platform extensions, err ret = %d\n",ret);
+        return 0; // 返回0表示出错或不支持SPIR-V
+    }
 
-    if (file == NULL) {
-        perror("Error opening file");
-        return 1;
+    // 检查扩展字符串中是否包含cl_khr_il_program
+    if (strstr(extensions, "cl_khr_il_program") != NULL) {
+        return 1; // 返回1表示支持SPIR-V
+    } else {
+        return 0; // 返回0表示不支持SPIR-V
+    }
+}
+
+/* Create program from a file and compile it */
+cl_program build_program(cl_context ctx, cl_device_id dev, const char* filename) {
+
+   cl_program program;
+   FILE *program_handle;
+   char *program_buffer, *program_log;
+   size_t program_size, log_size;
+   int err;
+
+   /* Read program file and place content into buffer */
+   program_handle = fopen(filename, "r");
+   if(program_handle == NULL) {
+      perror("Couldn't find the program file");
+      exit(1);
+   }
+   fseek(program_handle, 0, SEEK_END);
+   program_size = ftell(program_handle);
+   rewind(program_handle);
+   program_buffer = (char*)malloc(program_size + 1);
+   program_buffer[program_size] = '\0';
+   fread(program_buffer, sizeof(char), program_size, program_handle);
+   fclose(program_handle);
+
+   /* Create program from file 
+
+   Creates a program from the source code in the add_numbers.cl file. 
+   Specifically, the code reads the file's content into a char array 
+   called program_buffer, and then calls clCreateProgramWithSource.
+   */
+   program = clCreateProgramWithSource(ctx, 1, 
+      (const char**)&program_buffer, &program_size, &err);
+   if(err < 0) {
+      perror("Couldn't create the program");
+      exit(1);
+   }
+   free(program_buffer);
+
+   /* Build program 
+
+   The fourth parameter accepts options that configure the compilation. 
+   These are similar to the flags used by gcc. For example, you can 
+   define a macro with the option -DMACRO=VALUE and turn off optimization 
+   with -cl-opt-disable.
+   */
+   err = clBuildProgram(program, 0, NULL, NULL, NULL, NULL);
+   if(err < 0) {
+
+      /* Find size of log and print to std output */
+      clGetProgramBuildInfo(program, dev, CL_PROGRAM_BUILD_LOG, 
+            0, NULL, &log_size);
+      program_log = (char*) malloc(log_size + 1);
+      program_log[log_size] = '\0';
+      clGetProgramBuildInfo(program, dev, CL_PROGRAM_BUILD_LOG, 
+            log_size + 1, program_log, NULL);
+      printf("%s\n", program_log);
+      free(program_log);
+      exit(1);
+   }
+
+   return program;
+}
+
+
+cl_device_id getFirstSPIRVDevice(cl_platform_id *platforms, cl_uint numPlatforms) {
+    cl_device_id device = NULL;
+
+    for (cl_uint i = 0; i < numPlatforms; ++i) {
+        if(!platformSupportsSPIRV(platforms[i]))
+            continue;
+
+        char pv[1024];
+        cl_uint er = clGetPlatformInfo(platforms[i],CL_PLATFORM_VENDOR,sizeof(pv),pv,NULL);
+        
+        if (er != CL_SUCCESS) {
+            printf("Error get platform %s\n", er);
+        }else{
+            printf("platform: %s\n", pv);
+        }
+        cl_uint numDevices;
+        cl_int ret = clGetDeviceIDs(platforms[i], CL_DEVICE_TYPE_ALL, 0, NULL, &numDevices);
+        if (ret != CL_SUCCESS) {
+            printf("Error getting device count for platform %d\n", i);
+            continue;
+        }
+
+        cl_device_id *devices = (cl_device_id*)malloc(sizeof(cl_device_id) * numDevices);
+        ret = clGetDeviceIDs(platforms[i], CL_DEVICE_TYPE_ALL, numDevices, devices, NULL);
+        if (ret != CL_SUCCESS) {
+            printf("Error getting device IDs for platform %d\n", i);
+            free(devices);
+            continue;
+        }
+
+        for (cl_uint j = 0; j < numDevices; ++j) {
+            cl_bool supportsSPIRV;
+            ret = clGetDeviceInfo(devices[j], 0x105B, 0, NULL, NULL);
+            if (ret == CL_SUCCESS) {
+                supportsSPIRV = CL_TRUE;
+            } else {
+                supportsSPIRV = CL_FALSE;
+            }
+
+            if (supportsSPIRV) {
+                printf("get intel platform device %d\n",j);
+                device = devices[j];
+                free(devices);
+                return device;
+            }
+        }
+
+        free(devices);
+    }
+
+    return device;
+}
+
+
+typedef struct {
+    cl_uchar *data;
+    size_t size;
+} ByteData;
+
+ByteData readSPIRVFromFile(const char *filename) {
+    FILE *file = fopen(filename, "rb"); // 以二进制模式打开文件
+    ByteData ret = { NULL, 0 }; // 初始化返回的字节数据
+
+    if (!file) {
+        printf("Couldn't open file '%s'!\n", filename);
+        return ret; // 返回空字节数据
     }
 
     // 获取文件大小
     fseek(file, 0, SEEK_END);
-    file_size = ftell(file);
-    fseek(file, 0, SEEK_SET);
+    ret.size = ftell(file);
+    rewind(file);
 
-    // 分配足够的内存来存储文件内容
-    buffer = (unsigned char *)malloc(file_size);
-    if (buffer == NULL) {
-        perror("Memory allocation error");
+    // 分配内存以存储文件数据
+    ret.data = (cl_uchar*)malloc(ret.size);
+    if (!ret.data) {
+        printf("Memory allocation failed!\n");
         fclose(file);
-        return 2;
+        return ret; // 返回空字节数据
     }
 
-    // 读取文件内容到数组中
-    size_t bytes_read = fread(buffer, 1, file_size, file);
-    if (bytes_read != file_size) {
-        perror("Error reading file");
-        free(buffer);
+    // 从文件中读取数据到内存中
+    if (fread(ret.data, sizeof(cl_uchar), ret.size, file) != ret.size) {
+        printf("Error reading file '%s'!\n", filename);
+        free(ret.data);
         fclose(file);
-        return 3;
+        ret.data = NULL;
+        ret.size = 0;
+        return ret; // 返回空字节数据
     }
 
-    // 文件内容现在存储在buffer数组中
-
-    // 关闭文件和释放内存
     fclose(file);
-    // free(buffer);
-    *filesize = file_size;
-    return 0;
+    return ret; // 返回读取到的字节数据
 }
 
 
-int main(int argc, char** argv)
+int main()
 {
     int err;                            // error code returned from api calls
       
@@ -139,7 +269,8 @@ int main(int argc, char** argv)
     size_t global;                      // global domain size for our calculation
     size_t local;                       // local domain size for our calculation
 
-    cl_platform_id platform;
+    cl_uint numPlatforms;
+    cl_platform_id* platforms;
     cl_device_id device_id;             // compute device id 
     cl_context context;                 // compute context
     cl_command_queue commands;          // compute command queue
@@ -158,24 +289,40 @@ int main(int argc, char** argv)
     
     // Connect to a compute device
     //
-    int gpu = 1;
 
-    err = clGetPlatformIDs(1, &platform, NULL);
+    err = clGetPlatformIDs(0, NULL, &numPlatforms);
     if(err != CL_SUCCESS) {
-        printf("Error: Failed to get platform ID!, err = %d\n",err);
+        printf("Error: Failed to get numPlatforms!, err = %d\n",err);
         return EXIT_FAILURE;
     } 
 
-    err = clGetDeviceIDs(platform, gpu ? CL_DEVICE_TYPE_GPU : CL_DEVICE_TYPE_CPU, 1, &device_id, NULL);
-    if (err != CL_SUCCESS)
-    {
-        printf("Error: Failed to create a device group!, err = %d\n",err);
+    platforms = (cl_platform_id*)malloc(sizeof(cl_platform_id) * numPlatforms);
+    err = clGetPlatformIDs(numPlatforms, platforms, NULL);
+    if(err != CL_SUCCESS) {
+        printf("Error: Failed to get platforms!, err = %d\n",err);
         return EXIT_FAILURE;
+    } 
+
+
+    device_id = getFirstSPIRVDevice(platforms,numPlatforms);
+    char paramValue[1024];
+    cl_uint ret = clGetDeviceInfo(device_id, CL_DEVICE_VERSION, sizeof(paramValue), paramValue, NULL);
+    if (ret == CL_SUCCESS) {
+        printf("Device Version: %s\n", paramValue);
     }
-  
+
+    // 获取驱动版本
+    ret = clGetDeviceInfo(device_id, CL_DEVICE_NAME, sizeof(paramValue), paramValue, NULL);
+    if (ret == CL_SUCCESS) {
+        printf("Device Name: %s\n", paramValue);
+    }
+
     // Create a compute context 
     //
     context = clCreateContext(0, 1, &device_id, NULL, NULL, &err);
+    if(err != CL_SUCCESS){
+        printf("Error: Failed to create context!\n");
+    }
     if (!context)
     {
         printf("Error: Failed to create a compute context!\n");
@@ -193,20 +340,26 @@ int main(int argc, char** argv)
 
     // Create the compute program from the source buffer
     //
-    cl_uchar *spirv_buffer;
-    size_t filesize;
-    int tmp = read_spirv_from_file("C:/Users/30985/repo/ws/opencl2wasm/examples/square.spv",spirv_buffer,&filesize);
-    printf("read file, return %d, filesize = %d\n",tmp,filesize);
-    program = clCreateProgramWithIL(context, spirv_buffer,filesize,&err);
+    
+    // ByteData il = readSPIRVFromFile("C:/Users/30985/repo/ws/opencl2wasm/examples/square.spv");
 
+    // printf("read spirv , il.size = %d\n", il.size);
+    // // printf("li data:");
+    // //     for(size_t i=0; i < il.size; ++i){
+    // //         if(i % 20 == 0)printf("\n");
+    // //         printf("%02x", il.data[i]);
+    // //     }
+
+    // program = clCreateProgramWithIL(context, il.data, il.size, &err);
+    program = build_program(context, device_id, "C:/Users/30985/repo/ws/opencl2wasm/examples/square.cl");
+
+    printf("here\n");
     if (err != CL_SUCCESS)
     {
         printf("Error: Failed to create program with IL, err = %d!\n",err);
         exit(1);
     }
 
-
-    free(spirv_buffer);
     // program = clCreateProgramWithSource(context, 1, (const char **) & KernelSource, NULL, &err);
     if (!program)
     {
@@ -216,7 +369,19 @@ int main(int argc, char** argv)
 
     // Build the program executable
     //
-    err = clBuildProgram(program, 0, NULL, NULL, NULL, NULL);
+    // printf("before get program info.\n");
+    // cl_uint numd;
+    // err = clGetProgramInfo(program, CL_PROGRAM_NUM_DEVICES, sizeof(numd), &numd, NULL);
+    // if(err != CL_SUCCESS){
+    //     printf("cl get program info failed.\n");
+    // }else{
+    //     printf("cl get program info: %s\n", paramValue);
+    // }
+    
+    printf("before build program\n");
+    err = clBuildProgram(program, 1, &device_id, NULL, NULL, NULL);
+    
+    printf("here 2\n");
     if (err != CL_SUCCESS)
     {
         size_t len;
@@ -316,6 +481,7 @@ int main(int argc, char** argv)
     
     // Shutdown and cleanup
     //
+    free(platforms);
     clReleaseMemObject(input);
     clReleaseMemObject(output);
     clReleaseProgram(program);
