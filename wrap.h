@@ -7,6 +7,7 @@
 
 #define MAX_CL_NAME 30
 #define MAX_CL_PARAM 12
+#define MAX_SPV_BYTES 100000
 
 typedef struct {
   wasm_valkind_t param_types[MAX_CL_PARAM];
@@ -20,7 +21,7 @@ typedef struct {
   func_type ft;
 } define_func;
 
-#define FUNC_NUM 20
+#define FUNC_NUM 24
 
 int register_func_to_linker(define_func funcs[], int count,
                             wasmtime_linker_t *linker, const char *module,

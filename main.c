@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <wasi.h>
 
+const char *file_path;
 
 static void exit_with_error(const char *message, wasmtime_error_t *error,
                             wasm_trap_t *trap);
@@ -13,7 +14,7 @@ int main(int argc, char *argv[]) {
 
   wasm_engine_t *engine = wasm_engine_new();
   assert(engine != NULL);
-  wasmtime_store_t *store = wasmtime_store_new(engine, NULL, NULL);
+  wasm_store_t *store = wasmtime_store_new(engine, NULL, NULL);
   assert(store != NULL);
   wasmtime_context_t *context = wasmtime_store_context(store);
 
@@ -31,7 +32,7 @@ int main(int argc, char *argv[]) {
     return 1;
   }
 
-  const char *file_path = argv[1];
+  file_path = argv[1];
   FILE *file = fopen(file_path, "rb");
 
   if (!file) {

@@ -53,6 +53,16 @@ void *get_host_addr_auto(uint32_t wasm_addr) {
   return get_host_addr(wasm_addr, WASM);
 }
 
+size_t *get_host_size_t_addr(uint32_t wasm_addr, size_t *size_t_buffer) {
+  int *hostPtr = get_host_addr_auto(wasm_addr);
+  if (hostPtr == NULL) {
+    return NULL;
+  } else {
+    *size_t_buffer = (size_t)*hostPtr;
+    return size_t_buffer;
+  }
+}
+
 // 获得一个连续的链表
 void make_fake_addr_list(intptr_t *start, size_t count) {
   if (count < 0)

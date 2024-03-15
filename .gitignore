@@ -2,6 +2,7 @@
 *.spv
 *.bc
 *.log
+/target
 
 # Wasm
 *.wat

@@ -18,10 +18,12 @@ extern MemControl MemController;
 
 void *get_host_addr(uint32_t wasm_addr, MEM_TYPE tag);
 void *get_host_addr_auto(uint32_t wasm_addr);
+size_t *get_host_size_t_addr(uint32_t wasm_addr, size_t *size_t_buffer);
 void *get_addr64_arg_w(void *buffer[], void *start, size_t length,
                        size_t depth);
 void *get_addr64_arg_r(void *buffer[], uint32_t target[], MEM_TYPE mt,
                        size_t length, size_t depth);
+
 void cp_host_addr_to_wasm(uint32_t wasm_addr_buffer[],
                           uintptr_t host_addr_buffer[], size_t count);
 

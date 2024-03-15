@@ -25,6 +25,8 @@ set_target_properties(wasmtime-cl PROPERTIES
 
 	target_include_directories(wasmtime-cl PUBLIC wasmtime)
 	target_link_libraries(wasmtime-cl PUBLIC wasmtime)
-
+	target_link_libraries(wasmtime-cl INTERFACE ${WASMTIME_BUILD_PRODUCT}
+			ws2_32 advapi32 userenv ntdll shell32 ole32 bcrypt )
+    target_link_libraries(wasmtime-cl PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/wasm-parser-c/target/release/my_rust_lib.lib")
 	target_include_directories(wasmtime-cl PRIVATE ${OpenCL_INCLUDE_DIRS})
 	target_link_libraries(wasmtime-cl PRIVATE ${OpenCL_LIBRARIES})

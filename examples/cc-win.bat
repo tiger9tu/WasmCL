@@ -25,7 +25,6 @@ set "FILENAME=%1"
 
 wasm-custom-section "%FILENAME%.wasm" add SPIRV < "sample_kernel64.spv"
 
-
 del "%FILENAME%.wasm"
 ren "%FILENAME%.wasm.out" "%FILENAME%.wasm"
 
@@ -36,4 +35,4 @@ ren "%FILENAME%.wasm.out" "%FILENAME%.wasm"
 call "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build\vcvarsall.bat" amd64
 
 cl.exe /nologo /TC /W4 /DCL_TARGET_OPENCL_VERSION=300 /I%CL_ROOT%\install\include\ ^
-%FILENAME% /Fe:%FILENAME%-CL.exe /link /LIBPATH:%CL_ROOT%\install\lib OpenCL.lib
+%FILENAME% /Fe:%FILENAME%-CL.exe /link /LIBPATH:%CL_ROOT%\install\lib  OpenCL.lib
