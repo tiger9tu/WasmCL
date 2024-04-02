@@ -8,7 +8,10 @@ add_subdirectory(${WASMTIME_ROOT}/crates/c-api ${CMAKE_CURRENT_BINARY_DIR}/wasmt
 
 find_package(OpenCL)
 
-add_executable(wasmtime-cl main.c wrap.c mem.c)
+# 获取当前文件夹下的所有 .c 文件
+file(GLOB SOURCE_FILES *.c)
+
+add_executable(wasmtime-cl ${SOURCE_FILES})
 
 
 if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
@@ -23,10 +26,10 @@ set_target_properties(wasmtime-cl PROPERTIES
 	CXX_VISIBILITY_PRESET hidden
 	POSITION_INDEPENDENT_CODE ON)
 
-	target_include_directories(wasmtime-cl PUBLIC wasmtime)
-	target_link_libraries(wasmtime-cl PUBLIC wasmtime)
-	target_link_libraries(wasmtime-cl INTERFACE ${WASMTIME_BUILD_PRODUCT}
-			ws2_32 advapi32 userenv ntdll shell32 ole32 bcrypt )
-    target_link_libraries(wasmtime-cl PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/wasm-parser-c/target/release/my_rust_lib.lib")
-	target_include_directories(wasmtime-cl PRIVATE ${OpenCL_INCLUDE_DIRS})
-	target_link_libraries(wasmtime-cl PRIVATE ${OpenCL_LIBRARIES})
+target_include_directories(wasmtime-cl PUBLIC wasmtime)
+target_link_libraries(wasmtime-cl PUBLIC wasmtime)
+target_link_libraries(wasmtime-cl INTERFACE ${WASMTIME_BUILD_PRODUCT}
+		ws2_32 advapi32 userenv ntdll shell32 ole32 bcrypt )
+target_link_libraries(wasmtime-cl PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/wasm-parser-c/target/release/my_rust_lib.lib")
+target_include_directories(wasmtime-cl PRIVATE ${OpenCL_INCLUDE_DIRS})
+target_link_libraries(wasmtime-cl PRIVATE ${OpenCL_LIBRARIES})

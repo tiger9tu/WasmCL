@@ -24,8 +24,12 @@ void check_offset() { // heap offset =  current heap address >> 32 << 32
   }
 }
 
+MEM_TYPE get_mem_type(uint32_t addr) {
+  return get(&MemController.clAddrRec, addr) ? TRUNC : WASM;
+}
+
 void *get_host_addr(uint32_t wasm_addr, MEM_TYPE tag) {
-  if (wasm_addr >> 20 != 0 && tag == WASM) {
+  if (wasm_addr >> WASM_MAX_ADDR_BITS != 0 && tag == WASM) {
     printf("warning!, tag may not be WASM as wasm_addr = %p\n", wasm_addr);
   }
 
@@ -47,18 +51,16 @@ void *get_host_addr(uint32_t wasm_addr, MEM_TYPE tag) {
 void *get_host_addr_auto(uint32_t wasm_addr) {
   if (wasm_addr == NULL)
     return NULL;
-  if (wasm_addr >> 20 != 0) {
-    return get_host_addr(wasm_addr, TRUNC);
-  }
-  return get_host_addr(wasm_addr, WASM);
+  return get_host_addr(wasm_addr, get_mem_type(wasm_addr));
 }
 
 size_t *get_host_size_t_addr(uint32_t wasm_addr, size_t *size_t_buffer) {
-  int *hostPtr = get_host_addr_auto(wasm_addr);
+  unsigned int *hostPtr = get_host_addr_auto(wasm_addr);
   if (hostPtr == NULL) {
     return NULL;
   } else {
     *size_t_buffer = (size_t)*hostPtr;
+    printf("size_t value = %zu\n\n", *size_t_buffer);
     return size_t_buffer;
   }
 }
@@ -104,6 +106,15 @@ void cp_host_addr_to_wasm(uint32_t wasm_addr_buffer[],
   if (host_addr_buffer == NULL || wasm_addr_buffer == NULL)
     return;
   for (size_t i = 0; i < count; i++) {
-    wasm_addr_buffer[i] = (uint32_t)host_addr_buffer[i];
+    uint32_t trunc_addr = (uint32_t)host_addr_buffer[i];
+    wasm_addr_buffer[i] = trunc_addr;
+    insert(&MemController.clAddrRec, trunc_addr, host_addr_buffer[i]);
+  }
+}
+
+void cp_wasm_size_t_to_host(uint32_t *wasm_addr, size_t *host_size_t_buffer,
+                            size_t count) {
+  for (size_t i = 0; i < count; i++) {
+    host_size_t_buffer[i] = (size_t)wasm_addr[i];
   }
 }

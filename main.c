@@ -6,6 +6,7 @@
 #include <wasi.h>
 
 const char *file_path;
+char folder_path[256];
 
 static void exit_with_error(const char *message, wasmtime_error_t *error,
                             wasm_trap_t *trap);
@@ -64,7 +65,15 @@ int main(int argc, char *argv[]) {
   wasi_config_inherit_stdin(wasi_config);
   wasi_config_inherit_stdout(wasi_config);
   wasi_config_inherit_stderr(wasi_config);
-  wasi_config_preopen_dir(wasi_config, "../examples", ".");
+
+  const char *last_slash = strrchr(file_path, '/');
+  if (last_slash != NULL) {
+    strncpy(folder_path, file_path, last_slash - file_path);
+    folder_path[last_slash - file_path] = '\0';
+  } else {
+    strcpy(folder_path, ".");
+  }
+  wasi_config_preopen_dir(wasi_config, folder_path, ".");
   wasm_trap_t *trap = NULL;
   error = wasmtime_context_set_wasi(context, wasi_config);
   if (error != NULL)
@@ -94,6 +103,7 @@ int main(int argc, char *argv[]) {
   memory = item.of.memory;
 
   MemController.base = (uintptr_t)wasmtime_memory_data(context, &memory);
+  initHashMap(&MemController.clAddrRec);
 
   // Lookup our `run` export function
   wasmtime_extern_t run;

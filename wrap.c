@@ -3,6 +3,10 @@
 #include <assert.h>
 #include <stdio.h>
 
+void puts_(const char *str) {
+  // puts(str);
+}
+
 int register_func_to_linker(define_func funcs[], int count,
                             wasmtime_linker_t *linker, const char *module,
                             size_t module_len) {
@@ -35,9 +39,14 @@ int register_func_to_linker(define_func funcs[], int count,
 }
 
 void print_args(const wasmtime_val_t *args, size_t nargs) {
-  // for (size_t i = 0; i < nargs; i++)
-  // {
-  //     printf("arg[%d] = %p\n", i,args[i].of.i32);
+  // for (size_t i = 0; i < nargs; i++) {
+  //   printf("arg%d = %p\n", i, args[i].of.i32);
+  // }
+}
+
+void print_args_(const wasmtime_val_t *args, size_t nargs) {
+  // for (size_t i = 0; i < nargs; i++) {
+  //   printf("arg%d = %p\n", i, args[i].of.i32);
   // }
 }
 
@@ -48,7 +57,7 @@ wasm_trap_t *clGetPlatformIDs_callback(void *env, wasmtime_caller_t *caller,
                                        wasmtime_val_t *results,
                                        size_t nresults) {
 
-  puts("calling clGetPlatformIDS");
+  puts_("calling clGetPlatformIDS");
   print_args(args, nargs);
 
   intptr_t buffer[MAX_PTR_DEPTH];
@@ -69,10 +78,10 @@ wasm_trap_t *clGetPlatformInfo_callback(void *env, wasmtime_caller_t *caller,
                                         size_t nargs, wasmtime_val_t *results,
                                         size_t nresults) {
 
-  puts("calling clGetPlatformInfo");
+  puts_("calling clGetPlatformInfo");
   results[0].of.i32 = clGetPlatformInfo(
-      get_host_addr_auto(args[0].of.i32), args[1].of.i32, args[2].of.i32,
-      get_host_addr_auto(args[3].of.i32), get_host_addr_auto(args[4].of.i32));
+      get_host_addr(args[0].of.i32, TRUNC), args[1].of.i32, args[2].of.i32,
+      get_host_addr(args[3].of.i32, WASM), get_host_addr(args[4].of.i32, WASM));
 
   return NULL;
 }
@@ -80,7 +89,7 @@ wasm_trap_t *clGetPlatformInfo_callback(void *env, wasmtime_caller_t *caller,
 wasm_trap_t *clGetDeviceIDs_callback(void *env, wasmtime_caller_t *caller,
                                      const wasmtime_val_t *args, size_t nargs,
                                      wasmtime_val_t *results, size_t nresults) {
-  puts("calling getDeviceIDS");
+  puts_("calling getDeviceIDS");
   print_args(args, nargs);
 
   cl_uint num_entries = args[2].of.i32;
@@ -104,10 +113,11 @@ wasm_trap_t *clGetDeviceInfo_callback(void *env, wasmtime_caller_t *caller,
                                       wasmtime_val_t *results,
                                       size_t nresults) {
 
-  puts("calling clGetDeviceInfo");
-  results[0].of.i32 = clGetDeviceInfo(
-      get_host_addr_auto(args[0].of.i32), args[1].of.i32, args[2].of.i32,
-      get_host_addr_auto(args[3].of.i32), get_host_addr_auto(args[4].of.i32));
+  puts_("calling clGetDeviceInfo");
+  results[0].of.i32 =
+      clGetDeviceInfo(get_host_addr(args[0].of.i32, TRUNC), args[1].of.i32,
+                      args[2].of.i32, get_host_addr(args[3].of.i32, WASM),
+                      get_host_addr_auto(args[4].of.i32, WASM));
 
   return NULL;
 }
@@ -117,7 +127,7 @@ wasm_trap_t *clCreateContext_callback(void *env, wasmtime_caller_t *caller,
                                       wasmtime_val_t *results,
                                       size_t nresults) {
   check_offset();
-  puts("calling clCreateContext");
+  puts_("calling clCreateContext");
   print_args(args, nargs);
 
   cl_uint num_devices = args[1].of.i32;
@@ -126,11 +136,12 @@ wasm_trap_t *clCreateContext_callback(void *env, wasmtime_caller_t *caller,
   uintptr_t *addr64_arg_devices =
       get_addr64_arg_r(buffer, devices, TRUNC, num_devices, 1);
 
-  results[0].of.i32 = clCreateContext(
+  cl_context res = clCreateContext(
       get_host_addr(args[0].of.i32, WASM), num_devices, addr64_arg_devices,
       get_host_addr(args[3].of.i32, WASM), get_host_addr(args[4].of.i32, WASM),
       get_host_addr(args[5].of.i32, WASM));
 
+  cp_host_addr_to_wasm(&results[0].of.i32, &res, 1);
   return NULL;
 }
 
@@ -139,7 +150,7 @@ wasm_trap_t *clReleaseContext_callback(void *env, wasmtime_caller_t *caller,
                                        wasmtime_val_t *results,
                                        size_t nresults) {
 
-  puts("calling clReleaseContext");
+  puts_("calling clReleaseContext");
   results[0].of.i32 = clReleaseContext(get_host_addr_auto(args[0].of.i32));
 
   return NULL;
@@ -152,13 +163,13 @@ wasm_trap_t *clCreateCommandQueue_callback(void *env, wasmtime_caller_t *caller,
                                            wasmtime_val_t *results,
                                            size_t nresults) {
 
-  puts("calling clCreateCommandQueue");
+  puts_("calling clCreateCommandQueue");
   print_args(args, nargs);
-  results[0].of.i32 =
+  cl_command_queue res =
       clCreateCommandQueue(get_host_addr(args[0].of.i32, TRUNC),
                            get_host_addr(args[1].of.i32, TRUNC), args[2].of.i64,
                            get_host_addr(args[3].of.i32, WASM));
-
+  cp_host_addr_to_wasm(&results[0].of.i32, &res, 1);
   return NULL;
 }
 
@@ -167,7 +178,7 @@ clReleaseCommandQueue_callback(void *env, wasmtime_caller_t *caller,
                                const wasmtime_val_t *args, size_t nargs,
                                wasmtime_val_t *results, size_t nresults) {
 
-  puts("calling clReleaseCommandQueue");
+  puts_("calling clReleaseCommandQueue");
   results[0].of.i32 = clReleaseCommandQueue(get_host_addr_auto(args[0].of.i32));
 
   return NULL;
@@ -179,12 +190,13 @@ wasm_trap_t *clCreateBuffer_callback(void *env, wasmtime_caller_t *caller,
                                      const wasmtime_val_t *args, size_t nargs,
                                      wasmtime_val_t *results, size_t nresults) {
 
-  puts("calling clCreateBuffer");
+  puts_("calling clCreateBuffer");
   print_args(args, nargs);
-  results[0].of.i32 = clCreateBuffer(
+  cl_mem res = clCreateBuffer(
       get_host_addr(args[0].of.i32, TRUNC), args[1].of.i64, args[2].of.i32,
       get_host_addr(args[3].of.i32, WASM), get_host_addr(args[4].of.i32, WASM));
 
+  cp_host_addr_to_wasm(&results[0].of.i32, &res, 1);
   return NULL;
 }
 
@@ -193,7 +205,7 @@ wasm_trap_t *clEnqueueReadBuffer_callback(void *env, wasmtime_caller_t *caller,
                                           size_t nargs, wasmtime_val_t *results,
                                           size_t nresults) {
 
-  puts("calling clEnqueueReadBuffer");
+  puts_("calling clEnqueueReadBuffer");
 
   intptr_t buffer_1[MAX_PTR_DEPTH];
   intptr_t addr64_arg_event_wait_list = get_addr64_arg_r(
@@ -204,9 +216,38 @@ wasm_trap_t *clEnqueueReadBuffer_callback(void *env, wasmtime_caller_t *caller,
       get_addr64_arg_w(buffer_2, get_host_addr_auto(args[8].of.i32), 1, 1);
 
   results[0].of.i32 = clEnqueueReadBuffer(
-      get_host_addr_auto(args[0].of.i32), get_host_addr_auto(args[1].of.i32),
-      args[2].of.i32, args[3].of.i32, args[4].of.i32,
-      get_host_addr_auto(args[5].of.i32), args[6].of.i32,
+      get_host_addr(args[0].of.i32, TRUNC),
+      get_host_addr_auto(args[1].of.i32, TRUNC), args[2].of.i32, args[3].of.i32,
+      args[4].of.i32, get_host_addr_auto(args[5].of.i32, WASM), args[6].of.i32,
+      addr64_arg_event_wait_list, addr64_arg_event);
+
+  return NULL;
+}
+
+wasm_trap_t *clEnqueueWriteBuffer_callback(void *env, wasmtime_caller_t *caller,
+                                           const wasmtime_val_t *args,
+                                           size_t nargs,
+                                           wasmtime_val_t *results,
+                                           size_t nresults) {
+
+  puts_("calling clEnqueueWriteBuffer");
+  print_args(args, nargs);
+
+  intptr_t buffer_1[MAX_PTR_DEPTH];
+  intptr_t addr64_arg_event_wait_list = get_addr64_arg_r(
+      buffer_1, get_host_addr_auto(args[7].of.i32), TRUNC, args[6].of.i32, 1);
+
+  intptr_t buffer_2[MAX_PTR_DEPTH];
+  intptr_t addr64_arg_event =
+      get_addr64_arg_w(buffer_2, get_host_addr_auto(args[8].of.i32), 1, 1);
+
+  // debug
+  float *a = get_host_addr_auto(args[5].of.i32);
+
+  results[0].of.i32 = clEnqueueWriteBuffer(
+      get_host_addr(args[0].of.i32, TRUNC),
+      get_host_addr(args[1].of.i32, TRUNC), args[2].of.i32, args[3].of.i32,
+      args[4].of.i32, get_host_addr(args[5].of.i32, WASM), args[6].of.i32,
       addr64_arg_event_wait_list, addr64_arg_event);
 
   return NULL;
@@ -220,7 +261,7 @@ wasm_trap_t *clEnqueueReadBuffer_callback(void *env, wasmtime_caller_t *caller,
 //                                          const wasmtime_val_t *args,
 //                                          size_t nargs, wasmtime_val_t
 //                                          *results, size_t nresults) {
-//   puts("calling clEnqueueMapBuffer");
+//   puts_("calling clEnqueueMapBuffer");
 //   intptr_t buffer_1[MAX_PTR_DEPTH];
 //   intptr_t addr64_arg_event_wait_list = get_addr64_arg_r(
 //       buffer_1, get_host_addr_auto(args[7].of.i32), TRUNC, args[6].of.i32,
@@ -249,7 +290,7 @@ wasm_trap_t *clReleaseMemObject_callback(void *env, wasmtime_caller_t *caller,
                                          size_t nargs, wasmtime_val_t *results,
                                          size_t nresults) {
 
-  puts("calling clReleaseMemObject");
+  puts_("calling clReleaseMemObject");
   results[0].of.i32 = clReleaseMemObject(get_host_addr_auto(args[0].of.i32));
 
   return NULL;
@@ -260,7 +301,7 @@ clEnqueueUnmapMemObject_callback(void *env, wasmtime_caller_t *caller,
                                  const wasmtime_val_t *args, size_t nargs,
                                  wasmtime_val_t *results, size_t nresults) {
 
-  puts("calling clEnqueueUnmapMemObject");
+  puts_("calling clEnqueueUnmapMemObject");
   intptr_t buffer_1[MAX_PTR_DEPTH];
   intptr_t addr64_arg_event_wait_list = get_addr64_arg_r(
       buffer_1, get_host_addr_auto(args[7].of.i32), TRUNC, args[6].of.i32, 1);
@@ -279,17 +320,27 @@ clCreateProgramWithSource_callback(void *env, wasmtime_caller_t *caller,
                                    const wasmtime_val_t *args, size_t nargs,
                                    wasmtime_val_t *results, size_t nresults) {
   check_offset();
-  puts("calling clCreateProgramWithSource");
+  puts_("calling clCreateProgramWithSource");
   print_args(args, nargs);
 
   uintptr_t buffer[MAX_PTR_DEPTH];
   uintptr_t *addr64_arg_strings = get_addr64_arg_r(
       buffer, get_host_addr(args[2].of.i32, WASM), WASM, args[1].of.i32, 1);
 
-  results[0].of.i32 = clCreateProgramWithSource(
-      get_host_addr(args[0].of.i32, TRUNC), args[1].of.i32, addr64_arg_strings,
-      get_host_addr(args[3].of.i32, WASM), get_host_addr(args[4].of.i32, WASM));
+  char **strings = addr64_arg_strings;
 
+  size_t lengths[MAX_PROGRAM_COUNT];
+  int count = args[1].of.i32;
+  unsigned int *tmp;
+  tmp = get_host_addr(args[3].of.i32, WASM);
+  for (int i = 0; i < count; i++) {
+    lengths[i] = (size_t)tmp[i];
+  }
+
+  cl_program res = clCreateProgramWithSource(
+      get_host_addr(args[0].of.i32, TRUNC), args[1].of.i32, addr64_arg_strings,
+      lengths, get_host_addr(args[4].of.i32, WASM));
+  cp_host_addr_to_wasm(&results[0].of.i32, &res, 1);
   return NULL;
 }
 
@@ -298,11 +349,11 @@ clCreateProgramWithIL_callback(void *env, wasmtime_caller_t *caller,
                                const wasmtime_val_t *args, size_t nargs,
                                wasmtime_val_t *results, size_t nresults) {
 
-  puts("calling clCreateProgramWithIL");
-  results[0].of.i32 = clCreateProgramWithIL(
+  puts_("calling clCreateProgramWithIL");
+  cl_program res = clCreateProgramWithIL(
       get_host_addr_auto(args[0].of.i32), get_host_addr_auto(args[1].of.i32),
       args[2].of.i32, get_host_addr_auto(args[3].of.i32));
-
+  cp_host_addr_to_wasm(&results[0].of.i32, &res, 1);
   return NULL;
 }
 
@@ -311,7 +362,7 @@ wasm_trap_t *clGetProgramInfo_callback(void *env, wasmtime_caller_t *caller,
                                        wasmtime_val_t *results,
                                        size_t nresults) {
 
-  puts("calling clGetProgramInfo");
+  puts_("calling clGetProgramInfo");
   results[0].of.i32 = clGetProgramInfo(
       get_host_addr_auto(args[0].of.i32), args[1].of.i32, args[2].of.i32,
       get_host_addr_auto(args[3].of.i32), get_host_addr_auto(args[4].of.i32));
@@ -324,7 +375,7 @@ wasm_trap_t *clReleaseProgram_callback(void *env, wasmtime_caller_t *caller,
                                        wasmtime_val_t *results,
                                        size_t nresults) {
 
-  puts("calling clReleaseProgram");
+  puts_("calling clReleaseProgram");
   results[0].of.i32 = clReleaseProgram(get_host_addr_auto(args[0].of.i32));
 
   return NULL;
@@ -334,7 +385,7 @@ wasm_trap_t *clBuildProgram_callback(void *env, wasmtime_caller_t *caller,
                                      const wasmtime_val_t *args, size_t nargs,
                                      wasmtime_val_t *results, size_t nresults) {
 
-  puts("calling clBuildProgram");
+  puts_("calling clBuildProgram");
   print_args(args, nargs);
   intptr_t buffer[MAX_PTR_DEPTH];
   intptr_t *addr64_arg_device_list = get_addr64_arg_r(
@@ -344,6 +395,7 @@ wasm_trap_t *clBuildProgram_callback(void *env, wasmtime_caller_t *caller,
       get_host_addr(args[0].of.i32, TRUNC), args[1].of.i32,
       addr64_arg_device_list, get_host_addr(args[3].of.i32, WASM),
       get_host_addr(args[4].of.i32, WASM), get_host_addr(args[5].of.i32, WASM));
+
   return NULL;
 }
 
@@ -366,11 +418,13 @@ wasm_trap_t *clCreateKernel_callback(void *env, wasmtime_caller_t *caller,
                                      const wasmtime_val_t *args, size_t nargs,
                                      wasmtime_val_t *results, size_t nresults) {
 
-  puts("calling clCreateKernel");
+  puts_("calling clCreateKernel");
   print_args(args, nargs);
-  results[0].of.i32 = clCreateKernel(get_host_addr(args[0].of.i32, TRUNC),
-                                     get_host_addr(args[1].of.i32, WASM),
-                                     get_host_addr(args[2].of.i32, WASM));
+  cl_kernel res = clCreateKernel(get_host_addr(args[0].of.i32, TRUNC),
+                                 get_host_addr(args[1].of.i32, WASM),
+                                 get_host_addr(args[2].of.i32, WASM));
+
+  cp_host_addr_to_wasm(&results[0].of.i32, &res, 1);
   return NULL;
 }
 
@@ -379,24 +433,33 @@ wasm_trap_t *clReleaseKernel_callback(void *env, wasmtime_caller_t *caller,
                                       wasmtime_val_t *results,
                                       size_t nresults) {
 
-  puts("calling clReleaseKernel");
+  puts_("calling clReleaseKernel");
   results[0].of.i32 = clReleaseKernel(get_host_addr_auto(args[0].of.i32));
 
   return NULL;
 }
 
+bool is_ptr(uint32_t wasm_value) { return (wasm_value >> 20) > 0; }
+
 wasm_trap_t *clSetKernelArg_callback(void *env, wasmtime_caller_t *caller,
                                      const wasmtime_val_t *args, size_t nargs,
                                      wasmtime_val_t *results, size_t nresults) {
 
-  puts("calling clSetKernelArg");
+  puts_("calling clSetKernelArg");
   print_args(args, nargs);
 
   intptr_t buffer[MAX_PTR_DEPTH];
   intptr_t *addr64_arg_value = get_addr64_arg_r(
       buffer, get_host_addr(args[3].of.i32, WASM), TRUNC, 1, 1);
 
-  size_t arg_size = addr64_arg_value ? args[2].of.i32 * 2 : args[2].of.i32;
+  size_t arg_size = args[2].of.i32;
+
+  // 判断是否是地址形参数，如果是的话就要将size * 2
+  uint32_t *arg_value_target = (void **)get_host_addr(args[3].of.i32, WASM);
+
+  if (get_mem_type(*arg_value_target) == TRUNC) {
+    arg_size *= 2;
+  }
 
   results[0].of.i32 =
       clSetKernelArg(get_host_addr(args[0].of.i32, TRUNC), args[1].of.i32,
@@ -410,8 +473,8 @@ clEnqueueNDRangeKernel_callback(void *env, wasmtime_caller_t *caller,
                                 const wasmtime_val_t *args, size_t nargs,
                                 wasmtime_val_t *results, size_t nresults) {
 
-  puts("calling clEnqueueNDRangeKernel");
-  print_args(args, nargs);
+  puts_("calling clEnqueueNDRangeKernel");
+  print_args_(args, nargs);
   intptr_t buffer_1[MAX_PTR_DEPTH];
   intptr_t addr64_arg_event_wait_list = get_addr64_arg_r(
       buffer_1, get_host_addr_auto(args[7].of.i32), TRUNC, args[6].of.i32, 1);
@@ -419,31 +482,77 @@ clEnqueueNDRangeKernel_callback(void *env, wasmtime_caller_t *caller,
   intptr_t addr64_arg_event =
       get_addr64_arg_w(buffer_2, get_host_addr_auto(args[8].of.i32), 1, 1);
   // size_t 32 64位兼容问题
-  size_t global_work_offset_buffer, global_work_size_buffer,
-      local_work_size_buffer;
 
+  size_t *global_work_offset_ptr = NULL, *global_work_size_ptr = NULL,
+         *local_work_size_ptr = NULL;
+
+  size_t global_work_offset_buffer[MAX_PTR_DEPTH],
+      global_work_size_buffer[MAX_PTR_DEPTH],
+      local_work_size_buffer[MAX_PTR_DEPTH];
+
+  cl_uint work_dim = args[2].of.i32;
+  puts_("BEFORE 3");
+  if (args[3].of.i32 != NULL) {
+    cp_wasm_size_t_to_host((uint32_t *)(get_host_addr_auto(args[3].of.i32)),
+                           global_work_offset_buffer, work_dim);
+    global_work_offset_ptr = global_work_offset_buffer;
+  }
+  puts_("AFTER 3 BEFORE 4");
+  if (args[4].of.i32 != NULL) {
+    cp_wasm_size_t_to_host((uint32_t *)(get_host_addr_auto(args[4].of.i32)),
+                           global_work_size_buffer, work_dim);
+    global_work_size_ptr = global_work_size_buffer;
+  }
+  puts_("AFTER 4 BEFORE 5");
+  if (args[5].of.i32 != NULL) {
+    cp_wasm_size_t_to_host((uint32_t *)(get_host_addr_auto(args[5].of.i32)),
+                           local_work_size_buffer, work_dim);
+    local_work_size_ptr = local_work_size_buffer;
+  }
+  puts_("before clenqueueNDRANGE");
   results[0].of.i32 = clEnqueueNDRangeKernel(
       get_host_addr_auto(args[0].of.i32), get_host_addr_auto(args[1].of.i32),
-      args[2].of.i32,
-      get_host_size_t_addr(args[3].of.i32, &global_work_offset_buffer),
-      get_host_size_t_addr(args[4].of.i32, &global_work_size_buffer),
-      get_host_size_t_addr(args[5].of.i32, &local_work_size_buffer),
-      args[6].of.i32, addr64_arg_event_wait_list, addr64_arg_event);
+      args[2].of.i32, global_work_offset_ptr, global_work_size_ptr,
+      local_work_size_ptr, args[6].of.i32, addr64_arg_event_wait_list,
+      addr64_arg_event);
 
   cp_host_addr_to_wasm(get_host_addr_auto(args[8].of.i32), addr64_arg_event, 1);
 
   return NULL;
 }
 
+// Event Objects
+wasm_trap_t *clEnqueueBarrier_callback(void *env, wasmtime_caller_t *caller,
+                                       const wasmtime_val_t *args, size_t nargs,
+                                       wasmtime_val_t *results,
+                                       size_t nresults) {
+
+  puts_("calling clEnqueueBarrier");
+  print_args(args, nargs);
+  results[0].of.i32 = clEnqueueBarrier(get_host_addr(args[0].of.i32, TRUNC));
+  return NULL;
+}
 // Other functions
 wasm_trap_t *clFinish_callback(void *env, wasmtime_caller_t *caller,
                                const wasmtime_val_t *args, size_t nargs,
                                wasmtime_val_t *results, size_t nresults) {
 
-  puts("calling clFinish");
+  puts_("calling clFinish");
   print_args(args, nargs);
 
   results[0].of.i32 = clFinish(get_host_addr_auto(args[0].of.i32));
+
+  return NULL;
+}
+
+wasm_trap_t *clFlush_callback(void *env, wasmtime_caller_t *caller,
+                              const wasmtime_val_t *args, size_t nargs,
+                              wasmtime_val_t *results, size_t nresults) {
+
+  puts_("calling clFlush");
+  print_args(args, nargs);
+
+  results[0].of.i32 = clFlush(get_host_addr_auto(args[0].of.i32));
 
   return NULL;
 }
@@ -456,13 +565,11 @@ clExtGetPreCompiledILOfFile_callback(void *env, wasmtime_caller_t *caller,
                                      const wasmtime_val_t *args, size_t nargs,
                                      wasmtime_val_t *results, size_t nresults) {
 
-  puts("calling clExtGetPreCompiledILOfFile");
+  puts_("calling clExtGetPreCompiledILOfFile");
   print_args(args, nargs);
 
   get_wasm_section(file_path, "SPIRV", get_host_addr_auto(args[0].of.i32),
                    get_host_addr_auto(args[1].of.i32));
-
-  printf("after get wasm section\n");
 
   results[0].of.i32 = CL_SUCCESS; // useless
 
@@ -544,6 +651,9 @@ define_func func_array[30] = {
     {.name = "clEnqueueReadBuffer",
      .cb = clEnqueueReadBuffer_callback,
      .ft = COMMON_FUNC_TYPE9},
+    {.name = "clEnqueueWriteBuffer",
+     .cb = clEnqueueWriteBuffer_callback,
+     .ft = COMMON_FUNC_TYPE9},
     // {.name = "clEnqueueMapBuffer",
     //  .cb = clEnqueueMapBuffer_callback,
     //  .ft = {.param_types = {WASM_I32, WASM_I32, WASM_I32, WASM_I64, WASM_I32,
@@ -590,8 +700,13 @@ define_func func_array[30] = {
     {.name = "clEnqueueNDRangeKernel",
      .cb = clEnqueueNDRangeKernel_callback,
      .ft = COMMON_FUNC_TYPE9},
+    // Event
+    {.name = "clEnqueueBarrier",
+     .cb = clEnqueueBarrier_callback,
+     .ft = COMMON_FUNC_TYPE1},
     // Others
     {.name = "clFinish", .cb = clFinish_callback, .ft = COMMON_FUNC_TYPE1},
+    {.name = "clFlush", .cb = clFlush_callback, .ft = COMMON_FUNC_TYPE1},
     {.name = "clExtGetPreCompiledILOfFile",
      .cb = clExtGetPreCompiledILOfFile_callback,
      .ft = COMMON_FUNC_TYPE2}};
