@@ -24,22 +24,22 @@ for %%I in ("%FILEPATH%") do (
 --target=wasm32-unknown-wasi ^
 -isystem "%CL_ROOT%\install\include" ^
 --sysroot "%WASI_SDK_ROOT%\share\wasi-sysroot" ^
--I"%INCLUDES%" "%FILEPATH%" -c -o "%FILEPATH%.o"
+-I"%INCLUDES%" "%FILEPATH%" -c -O0 -o "%FILEPATH%.o"
 
 "%WASI_SDK_ROOT%\bin\wasm-ld.exe" -m wasm32 ^
 -L"%WASI_SDK_ROOT%\share\wasi-sysroot\lib\wasm32-wasi" ^
 "%WASI_SDK_ROOT%\share\wasi-sysroot\lib\wasm32-wasi\crt1-command.o" "%FILEPATH%.o" -lc "%WASI_SDK_ROOT%\lib\clang\17\lib\wasi\libclang_rt.builtins-wasm32.a"  -o "%FILEPATH%.wasm" --import-undefined
 
-@REM wasm-custom-section "%FILEPATH%.wasm" add SPIRV < "sample_kernel64.spv"
+wasm-custom-section "%FILEPATH%.wasm" add SPIRV < "sample_kernel64.spv"
 
 @REM del "%FILEPATH%.wasm"
 @REM ren "%FILEPATH%.wasm.out" "%FILEPATH%.wasm"
 
-"%WABT_ROOT%\bin\wasm2wat.exe" "%FILEPATH%.wasm" > "%FILEPATH%.wat"
+@REM "%WABT_ROOT%\bin\wasm2wat.exe" "%FILEPATH%.wasm" > "%FILEPATH%.wat"
 
 
 
 call "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build\vcvarsall.bat" amd64
 
-cl.exe /nologo /TC /W4 /DCL_TARGET_OPENCL_VERSION=300 /I%CL_ROOT%\install\include\ /I%INCLUDES% ^
-%FILEPATH% /Fe:%FILEPATH%.exe /link /LIBPATH:%CL_ROOT%\install\lib  OpenCL.lib
+cl.exe /nologo /Od /TC /W4 /DCL_TARGET_OPENCL_VERSION=300 /I%CL_ROOT%\install\include\ /I%INCLUDES% ^
+%FILEPATH% /Fe:%FILEPATH%.exe /link /LIBPATH:%CL_ROOT%\install\lib   OpenCL.lib

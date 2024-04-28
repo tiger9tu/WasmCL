@@ -2,6 +2,7 @@
 #include "mem.h"
 #include <assert.h>
 #include <stdio.h>
+#include <time.h>
 
 void puts_(const char *str) {
   // puts(str);
@@ -350,10 +351,21 @@ clCreateProgramWithIL_callback(void *env, wasmtime_caller_t *caller,
                                wasmtime_val_t *results, size_t nresults) {
 
   puts_("calling clCreateProgramWithIL");
+
+  // time check
+  clock_t start, end;
+  double spirv_init_time;
+
+  start = clock();
   cl_program res = clCreateProgramWithIL(
       get_host_addr_auto(args[0].of.i32), get_host_addr_auto(args[1].of.i32),
       args[2].of.i32, get_host_addr_auto(args[3].of.i32));
   cp_host_addr_to_wasm(&results[0].of.i32, &res, 1);
+
+  end = clock();
+  spirv_init_time = ((double)(end - start));
+  printf("spirv init time = %f\n\n", spirv_init_time);
+
   return NULL;
 }
 

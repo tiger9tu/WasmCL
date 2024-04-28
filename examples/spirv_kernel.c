@@ -1,7 +1,7 @@
 #include <CL/cl.h>
 #include <stdio.h>
 #include <stdlib.h>
-
+#include <time.h>
 #define PLATFORM_COUNT 2
 #define INTEL_PLATFORM_IDX 1
 #define INTEL_DEVICE_COUNT 1
@@ -17,6 +17,11 @@ typedef struct {
 } SpirvCode;
 
 int main() {
+  // timer
+  clock_t start, end;
+  double spirV_start_time, spirV_start_time_load, spirV_start_time_compile,
+      spirV_start_time_build_prog, spirV_run_time;
+
   int err; // error code returned from api calls
 
   char paramBuffer[1000];
@@ -70,10 +75,19 @@ int main() {
   }
 
   // SpirvCode il = readSPIRVFromFile(SPIRV_FILE);
-  SpirvCode il;
-  err = clExtGetPreCompiledILOfFile(il.data, &il.size);
 
+  SpirvCode il;
+
+  start = clock();
+  err = clExtGetPreCompiledILOfFile(il.data, &il.size);
+  end = clock();
+  spirV_start_time_load = ((double)(end - start));
+
+  start = clock();
   program = clCreateProgramWithIL(context, il.data, il.size, &err);
+  end = clock();
+  spirV_start_time_compile = ((double)(end - start));
+
   if (err != CL_SUCCESS) {
     printf("failed to create program with il, err = %d\n", err);
   } else {
@@ -81,46 +95,63 @@ int main() {
   }
 
   /////////////////////////////////////////
+  start = clock();
   err = clBuildProgram(program, 1, devices, NULL, NULL, NULL);
-  if (err != CL_SUCCESS) {
-    printf("failed to build program, err = %d\n", err);
-  } else {
-    printf("build program successful\n");
-  }
+  end = clock();
+  spirV_start_time_build_prog = ((double)(end - start));
 
-  /////////////////////////////////////////
-  kernel = clCreateKernel(program, "Test", &err);
-  if (err != CL_SUCCESS) {
-    printf("failed to create kernel, err = %d\n", err);
-  } else {
-    printf("create kernel successful\n");
-  }
+  spirV_start_time = spirV_start_time_load + spirV_start_time_compile +
+                     spirV_start_time_build_prog;
+  printf("\ntime:\n"
+         "spirV load time: %fms\n"
+         "spirV compile time: %fms\n"
+         "spirV build program time: %fms\n"
+         "spirV total start time: %fms\n\n",
+         spirV_start_time_load, spirV_start_time_compile,
+         spirV_start_time_build_prog, spirV_start_time);
 
-  //////////////////////////////////////////
-  cl_mem deviceMemDst = clCreateBuffer(context, CL_MEM_ALLOC_HOST_PTR,
-                                       gwx * sizeof(cl_uint), NULL, NULL);
+  // if (err != CL_SUCCESS) {
+  //   printf("failed to build program, err = %d\n", err);
+  // } else {
+  //   printf("build program successful\n");
+  // }
 
-  // 设置内核参数
-  clSetKernelArg(kernel, 0, sizeof(cl_mem), (void *)&deviceMemDst);
+  // /////////////////////////////////////////
+  // kernel = clCreateKernel(program, "Test", &err);
+  // if (err != CL_SUCCESS) {
+  //   printf("failed to create kernel, err = %d\n", err);
+  // } else {
+  //   printf("create kernel successful\n");
+  // }
 
-  // 执行内核
-  size_t global_work_size[1] = {gwx};
-  clEnqueueNDRangeKernel(commands, kernel, 1, NULL, global_work_size, NULL, 0,
-                         NULL, NULL);
+  // //////////////////////////////////////////
+  // cl_mem deviceMemDst = clCreateBuffer(context, CL_MEM_ALLOC_HOST_PTR,
+  //                                      gwx * sizeof(cl_uint), NULL, NULL);
 
-  printf("after clenqueueNDRangeKernel\n");
-  // 验证结果并打印前几个值
+  // // 设置内核参数
+  // clSetKernelArg(kernel, 0, sizeof(cl_mem), (void *)&deviceMemDst);
 
-  if (gwx > 3) {
-    int res[3];
-    err = clEnqueueReadBuffer(commands, deviceMemDst, CL_TRUE, 0, sizeof(res),
-                              res, 0, NULL, NULL); // <=====GET OUTPUT
+  // // 执行内核
+  // size_t global_work_size[1] = {gwx};
+  // clEnqueueNDRangeKernel(commands, kernel, 1, NULL, global_work_size, NULL,
+  // 0,
+  //                        NULL, NULL);
 
-    printf("First few values: [0] = %u, [1] = %u, [2] = %u\n", res[0], res[1],
-           res[2]);
-  }
+  // printf("after clenqueueNDRangeKernel\n");
+  // // 验证结果并打印前几个值
 
-  clFinish(commands);
+  // if (gwx > 3) {
+  //   int res[3];
+  //   err = clEnqueueReadBuffer(commands, deviceMemDst, CL_TRUE, 0,
+  //   sizeof(res),
+  //                             res, 0, NULL, NULL); // <=====GET OUTPUT
 
-  printf("Done\n");
+  //   printf("First few values: [0] = %u, [1] = %u, [2] = %u\n", res[0],
+  //   res[1],
+  //          res[2]);
+  // }
+
+  // clFinish(commands);
+
+  // printf("Done\n");
 }

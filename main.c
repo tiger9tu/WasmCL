@@ -3,6 +3,7 @@
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <time.h>
 #include <wasi.h>
 
 const char *file_path;
@@ -13,21 +14,15 @@ static void exit_with_error(const char *message, wasmtime_error_t *error,
 
 int main(int argc, char *argv[]) {
 
-  wasm_engine_t *engine = wasm_engine_new();
-  assert(engine != NULL);
-  wasm_store_t *store = wasmtime_store_new(engine, NULL, NULL);
-  assert(store != NULL);
-  wasmtime_context_t *context = wasmtime_store_context(store);
+  // for initiate time checking
+  clock_t start, end;
+  double wasm_compile_time, wasm_init_time, wasmtime_start_time,
+      wasmtime_runtime_and_wasm_runtime, wasmtime_runtime;
 
-  // Create a linker with WASI functions defined
-  wasmtime_linker_t *linker = wasmtime_linker_new(engine);
-  wasmtime_error_t *error = wasmtime_linker_define_wasi(linker);
-  if (error != NULL)
-    exit_with_error("failed to link wasi", error, NULL);
+  start = clock();
 
-  wasm_byte_vec_t wasm;
   // Load our input file to parse it next
-
+  wasm_byte_vec_t wasm;
   if (argc != 2) {
     printf("Usage: %s <file_path>\n", argv[0]);
     return 1;
@@ -35,6 +30,8 @@ int main(int argc, char *argv[]) {
 
   file_path = argv[1];
   FILE *file = fopen(file_path, "rb");
+
+  printf("file: %s\n", file_path);
 
   if (!file) {
     printf("> Error loading file!\n");
@@ -50,12 +47,17 @@ int main(int argc, char *argv[]) {
   }
   fclose(file);
 
-  // Compile our modules
-  wasmtime_module_t *module = NULL;
-  error = wasmtime_module_new(engine, (uint8_t *)wasm.data, wasm.size, &module);
-  if (!module)
-    exit_with_error("failed to compile module", error, NULL);
-  wasm_byte_vec_delete(&wasm);
+  wasm_engine_t *engine = wasm_engine_new();
+  assert(engine != NULL);
+  wasm_store_t *store = wasmtime_store_new(engine, NULL, NULL);
+  assert(store != NULL);
+  wasmtime_context_t *context = wasmtime_store_context(store);
+
+  // Create a linker with WASI functions defined
+  wasmtime_linker_t *linker = wasmtime_linker_new(engine);
+  wasmtime_error_t *error = wasmtime_linker_define_wasi(linker);
+  if (error != NULL)
+    exit_with_error("failed to link wasi", error, NULL);
 
   // Instantiate wasi
   wasi_config_t *wasi_config = wasi_config_new();
@@ -83,7 +85,21 @@ int main(int argc, char *argv[]) {
   printf("Creating callback...\n");
   register_func_to_linker(func_array, FUNC_NUM, linker, "env", 3);
 
+  end = clock();
+  wasmtime_start_time = ((double)(end - start));
+
+  // Compile our modules
+  start = clock();
+  wasmtime_module_t *module = NULL;
+  error = wasmtime_module_new(engine, (uint8_t *)wasm.data, wasm.size, &module);
+  if (!module)
+    exit_with_error("failed to compile module", error, NULL);
+  wasm_byte_vec_delete(&wasm);
+  end = clock();
+  wasm_compile_time = ((double)(end - start));
+
   // Instantiate the module
+  start = clock();
   error = wasmtime_linker_module(linker, context, "", 0, module);
   if (error != NULL)
     exit_with_error("failed to instantiate module", error, NULL);
@@ -92,6 +108,8 @@ int main(int argc, char *argv[]) {
   error = wasmtime_linker_instantiate(linker, context, module, &instance, NULL);
   if (error != NULL)
     exit_with_error("failed to instantiate linking1", error, trap);
+  end = clock();
+  wasm_init_time = ((double)(end - start));
 
   // get memory
   wasmtime_memory_t memory;
@@ -111,9 +129,24 @@ int main(int argc, char *argv[]) {
                                     strlen("_start"), &run);
   assert(ok);
   assert(run.kind == WASMTIME_EXTERN_FUNC);
+
+  start = clock();
   error = wasmtime_func_call(context, &run.of.func, NULL, 0, NULL, 0, &trap);
+  end = clock();
+  wasmtime_runtime_and_wasm_runtime = ((double)(end - start));
+
   if (error != NULL || trap != NULL)
     exit_with_error("failed to call run", error, trap);
+
+  // output time
+  printf("\nTime results:\n\n"
+         "file size: %dBytes\n"
+         "Compile module time: %fms\n"
+         "Initiate module time:%fms\n"
+         "wasmtime_start_time: %fms\n"
+         "wasmtime_runtime_and_wasm_runtime: %fms\n\n\n\n",
+         file_size, wasm_compile_time, wasm_init_time, wasmtime_start_time,
+         wasmtime_runtime_and_wasm_runtime);
 
   return 0;
 }
