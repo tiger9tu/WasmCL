@@ -1,4 +1,4 @@
-# opencl2wasm
+# WasmCL
 
 #### 介绍
 能够让opencl在wasmtime虚拟机中运行
